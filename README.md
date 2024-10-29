@@ -31,3 +31,7 @@ Input controllers:
 - Axis to button mapping?
 - Rumble support
 - Other 'fancy' settings (leds etc.)
+
+## Known issues
+
+- xwiimote not linked properly => try to compile with `XWIIMOTE_SYS_STATIC=1`

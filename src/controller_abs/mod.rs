@@ -111,6 +111,7 @@ fn test_normalization() {
 }
 
 // Values in axis are all u64, most likely controllers will have smaller sizes, so more easily convertible.
+#[derive(Clone, Debug)]
 pub struct Axis {
     pub value: u64,
     min: u64,
@@ -293,8 +294,14 @@ impl Default for Axis {
 
 #[test]
 fn test_axis() {
-    assert_eq!(Axis::new::<u8, _>(127, u8::MIN, u8::MAX).convert_into::<u8, _>(false), 127);
-    assert_eq!(Axis::new::<u8, _>(50, 0, 100).convert_into::<u8, _>(false), 127);
+    assert_eq!(
+        Axis::new::<u8, _>(127, u8::MIN, u8::MAX).convert_into::<u8, _>(false),
+        127
+    );
+    assert_eq!(
+        Axis::new::<u8, _>(50, 0, 100).convert_into::<u8, _>(false),
+        127
+    );
     assert_eq!(Axis::new(0.0, -1.0, 1.0).convert_into::<u8, _>(false), 127);
 }
 
@@ -357,7 +364,7 @@ impl JoystickState {
 }
 
 // Generic gamepad
-#[derive(EnumIter, Hash, Eq, PartialEq, Clone)]
+#[derive(EnumIter, Hash, Eq, PartialEq, Clone, Debug)]
 pub enum GamepadButton {
     North,
     East,
@@ -376,7 +383,7 @@ pub enum GamepadButton {
     DPadRight,
 }
 
-#[derive(EnumIter, PartialEq, Eq, Hash, Clone)]
+#[derive(EnumIter, PartialEq, Eq, Hash, Clone, Debug)]
 pub enum GamepadAxis {
     LeftTrigger,
     RightTrigger,
@@ -423,11 +430,12 @@ pub enum InputType {
 }
 
 // Mappings
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum OutputMapping {
     Button(GamepadButton),
     Axis(GamepadAxis),
 }
+
 pub struct ControllerMapping<T>
 where
     T: Clone,
@@ -438,8 +446,6 @@ where
 
 pub trait ControllerInput {
     type ControllerType;
-    fn to_gamepad<'a>(&'a mut self) -> &'a Gamepad;
-    fn discover_all() -> Vec<Self::ControllerType>;
+    fn to_gamepad(&mut self) -> &Gamepad;
     fn prep_for_input_events(&mut self);
-    async fn get_next_inputs(&mut self) -> Result<bool, &'static str>;
 }
