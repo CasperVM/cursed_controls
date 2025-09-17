@@ -1,3 +1,3 @@
-[submodule "src/360-w-raw-gadget"]
-	path = src/360-w-raw-gadget
-	url = https://github.com/Berghopper/360-w-raw-gadget.git
+[submodule "rust_stub/src/360-w-raw-gadget"]
+	path = rust_stub/src/360-w-raw-gadget
+	url = https://github.com/CasperVM/360-w-raw-gadget.git
