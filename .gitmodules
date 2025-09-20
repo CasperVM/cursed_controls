@@ -1,3 +1,6 @@
 [submodule "rust_stub/src/360-w-raw-gadget"]
-	path = rust_stub/src/360-w-raw-gadget
-	url = https://github.com/CasperVM/360-w-raw-gadget.git
+    path = rust_stub/src/360-w-raw-gadget
+    url = git@github.com:CasperVM/360-w-raw-gadget.git
+[submodule "python/360-w-raw-gadget"]
+    path = python/360-w-raw-gadget
+    url = git@github.com:CasperVM/360-w-raw-gadget.git
