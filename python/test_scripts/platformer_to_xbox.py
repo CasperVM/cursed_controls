@@ -11,7 +11,7 @@ import ctypes
 import os
 import time
 
-from x360 import XboxControllerState
+from python.x360 import XboxControllerState
 
 # Xbox Emu
 # Path to shared lib

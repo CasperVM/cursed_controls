@@ -1,7 +1,37 @@
 from dataclasses import dataclass
 import struct
+from enum import Enum
+from evdev import ecodes
 
-# --- BitPackedButton and helpers ---
+
+class X360Surfaces(Enum):
+    A = ("A", ecodes.BTN_A)
+    B = ("B", ecodes.BTN_B)
+    X = ("X", ecodes.BTN_X)
+    Y = ("Y", ecodes.BTN_Y)
+    OPTIONS = ("OPTIONS", ecodes.BTN_SELECT)
+    XBOX = ("XBOX", ecodes.BTN_MODE)
+    START = ("START", ecodes.BTN_START)
+    STICK_L = ("STICK_L", ecodes.BTN_THUMBL)
+    STICK_R = ("STICK_R", ecodes.BTN_THUMBR)
+    BUMPER_L = (("BUMPER_L", ecodes.BTN_TL),)
+    BUMPER_R = ("BUMPER_R", ecodes.BTN_TR)
+
+    # Dpad
+    DPAD_UP = ("DPAD_UP", ecodes.ABS_HAT0Y)  # -1
+    DPAD_DOWN = ("DPAD_DOWN", ecodes.ABS_HAT0Y)  # 1
+    DPAD_LEFT = ("DPAD_LEFT", ecodes.ABS_HAT0X)  # -1
+    DPAD_RIGHT = ("DPAD_RIGHT", ecodes.ABS_HAT0X)  # 1
+
+    # Triggers
+    LEFT_TRIGGER = ("LEFT_TRIGGER", ecodes.ABS_BRAKE)  # 8-bit 0-1024
+    RIGHT_TRIGGER = ("RIGHT_TRIGGER", ecodes.ABS_GAS)  # 8-bit 0-1024
+
+    # Joystick axis
+    LEFT_JOYSTICK_X = ("LEFT_JOYSTICK_X", ecodes.ABS_X)
+    LEFT_JOYSTICK_Y = ("LEFT_JOYSTICK_Y", ecodes.ABS_Y)
+    RIGHT_JOYSTICK_X = ("RIGHT_JOYSTICK_X", ecodes.ABS_RZ)
+    RIGHT_JOYSTICK_Y = ("RIGHT_JOYSTICK_Y", ecodes.ABS_Z)
 
 
 @dataclass
@@ -21,9 +51,6 @@ class BitPackedButtons:
             if b.value:
                 result |= 1 << b.bit
         return result & 0xFF
-
-
-# --- Axes and Joystick ---
 
 
 @dataclass
@@ -47,9 +74,6 @@ class JoystickAxis:
 class JoystickState:
     x: JoystickAxis
     y: JoystickAxis
-
-
-# --- Xbox button state ---
 
 
 class XboxButtonState:
@@ -124,9 +148,6 @@ class XboxButtonState:
         raise ValueError(f"No button found with name '{name}'")
 
 
-# --- Xbox controller state ---
-
-
 class XboxControllerState:
     def __init__(self):
         self.buttons = XboxButtonState()
@@ -151,3 +172,33 @@ class XboxControllerState:
         packet[12:14] = struct.pack("<h", self.right_joystick.y.to_i16())
 
         return bytes(packet)
+
+    def by_enum(self, enum_member: X360Surfaces):
+        """Return the corresponding controller attribute for the given X360Surfaces enum."""
+        mapping = {
+            X360Surfaces.A: self.buttons.a,
+            X360Surfaces.B: self.buttons.b,
+            X360Surfaces.X: self.buttons.x,
+            X360Surfaces.Y: self.buttons.y,
+            X360Surfaces.BUMPER_L: self.buttons.lb,
+            X360Surfaces.BUMPER_R: self.buttons.rb,
+            X360Surfaces.STICK_L: self.buttons.l3,
+            X360Surfaces.STICK_R: self.buttons.r3,
+            X360Surfaces.START: self.buttons.start,
+            X360Surfaces.OPTIONS: self.buttons.options,
+            X360Surfaces.XBOX: self.buttons.xbox,
+            X360Surfaces.DPAD_UP: self.buttons.dpad_up,
+            X360Surfaces.DPAD_DOWN: self.buttons.dpad_down,
+            X360Surfaces.DPAD_LEFT: self.buttons.dpad_left,
+            X360Surfaces.DPAD_RIGHT: self.buttons.dpad_right,
+            X360Surfaces.LEFT_TRIGGER: self.left_trigger,
+            X360Surfaces.RIGHT_TRIGGER: self.right_trigger,
+            X360Surfaces.LEFT_JOYSTICK_X: self.left_joystick.x,
+            X360Surfaces.LEFT_JOYSTICK_Y: self.left_joystick.y,
+            X360Surfaces.RIGHT_JOYSTICK_X: self.right_joystick.x,
+            X360Surfaces.RIGHT_JOYSTICK_Y: self.right_joystick.y,
+        }
+        try:
+            return mapping[enum_member]
+        except KeyError:
+            raise ValueError(f"No control found for enum {enum_member}")
