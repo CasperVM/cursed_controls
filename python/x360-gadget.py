@@ -40,7 +40,6 @@ def send_to_ep(fd: int, n: int, data: bytes) -> bool:
     return lib.send_to_ep(fd, n, arr, len(data))
 
 
-# Example loop (similar to your Rust example_loop)
 def example_loop():
     fd = init_360_gadget(True, 1)
     print("fd =", fd)
