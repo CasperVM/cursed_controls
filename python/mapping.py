@@ -169,13 +169,16 @@ class InputMapping:
     cap_code: int
     x360_out: X360Surfaces
 
+    def __str__(self):
+        return f"{self.device_identifier}-{self.cap_type}-{self.cap_code}-{self.x360_out.value[0]}"
+
 
 class DeviceMenu:
     def __init__(self):
         self.parents = build_parent_device_tree()
         # flatten
         self.devices = [i for p in self.parents for i in p.flatten()]
-        self.mapping = []
+        self.mapping = {}
 
     def main_menu(self, last_input_err=False):
         while True:
@@ -259,16 +262,14 @@ class DeviceMenu:
                     print(f"({jdx}). {n.value[0]}")
                 print()
                 inp_opt_map = int(input("Select option: "))
-
-                self.mapping.append(
-                    InputMapping(
-                        device_identifier=device_identifier,
-                        cap_type=event_type_code,
-                        cap_code=capability_code,
-                        x360_out=X360Surfaces(list(X360Surfaces)[inp_opt_map].value[0]),
-                    )
+                mapping = InputMapping(
+                    device_identifier=device_identifier,
+                    cap_type=event_type_code,
+                    cap_code=capability_code,
+                    x360_out=X360Surfaces(list(X360Surfaces)[inp_opt_map]),
                 )
-                print(self.mapping)
+                self.mapping[str(mapping)] = mapping
+                print(self.mapping.keys())
                 time.sleep(1)
 
             # except e as Error:
