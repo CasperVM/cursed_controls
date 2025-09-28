@@ -2,13 +2,15 @@
 
 import asyncio
 from dataclasses import dataclass, field
+import json
+
 import sys
-import time
+
 from typing import Dict, Generator, List
 import evdev
 from evdev import ecodes
 from evdev.ecodes import ABS
-import os, subprocess, re
+import os
 
 from pathlib import Path
 
@@ -28,15 +30,17 @@ class InputDeviceMetadata:
     is_composite_parent: bool  # True if this is the main UHID device
 
     def __str__(self):
-        prefix = ""
-        # if self.parent_uhid:
-        #     prefix += f"('{self.parent_uhid}'): "
-
         if self.phys_id:
-            return f"{prefix}'{self.name}': {self.phys_id}"
+            return f"'{self.name}': {self.phys_id}"
         elif self.uniq:
-            return f"{prefix}'{self.name}': {self.uniq}"
-        return f"{prefix}'{self.name}': {self.event_path}"
+            return f"'{self.name}': {self.uniq}"
+        return f"'{self.name}': {self.event_path}"
+
+    def first_identifier(self):
+        """
+        Returns first possible identifier
+        """
+        return self.uniq or self.phys_id or self.name
 
 
 def device_path_to_meta(device: evdev.InputDevice) -> InputDeviceMetadata:
@@ -172,6 +176,18 @@ class InputMapping:
     def __str__(self):
         return f"{self.device_identifier}-{self.cap_type}-{self.cap_code}-{self.x360_out.value[0]}"
 
+    def to_dict(self):
+        return {
+            "device_identifier": self.device_identifier,
+            "cap_type": self.cap_type,
+            "cap_code": self.cap_code,
+            "x360_out": self.x360_out.value[0],
+        }
+
+    @classmethod
+    def from_dict(cls, d):
+        cls.__init__(**{**d, "x360_out": X360Surfaces(d["x360_out"])})
+
 
 class DeviceMenu:
     def __init__(self):
@@ -180,11 +196,21 @@ class DeviceMenu:
         self.devices = [i for p in self.parents for i in p.flatten()]
         self.mapping = {}
 
+    def mapping_to_file(self, outfile="out.json"):
+        all_mappings = [m.to_dict() for m in self.mapping.values()]
+        with open(outfile, "w") as f:
+            f.write(json.dumps(all_mappings))
+
     def main_menu(self, last_input_err=False):
         while True:
             os.system("clear")
             if last_input_err:
                 print("=====\nPlease choose a device number!\n=====")
+
+            print("Options:")
+            print("(v): view mapping")
+            print()
+
             for idx, d in enumerate(self.devices):
                 if not d.meta.is_composite_parent:
                     print(f"  ({idx}): {d}")
@@ -192,7 +218,11 @@ class DeviceMenu:
                 print(f"({idx}): {d}")
 
             try:
-                mapping_idx_usr = int(input("Choose device for mapping: "))
+                inp_usr = input("Choose device for mapping: ")
+                if inp_usr == "v":
+                    self.view_mapping()
+                    continue
+                mapping_idx_usr = int(inp_usr)
                 if mapping_idx_usr not in range(0, len(self.devices)):
                     self.main_menu(last_input_err=True)
                 self.device_menu(mapping_idx_usr)
@@ -203,10 +233,10 @@ class DeviceMenu:
             #     self.main_menu(last_input_err=True)
 
     def device_menu(self, idx):
-        os.system("clear")
         dev: evdev.InputDevice = self.devices[idx].device
         meta: InputDeviceMetadata = self.devices[idx].meta
         while True:
+            os.system("clear")
             print(f"Selected device:\n ({idx}): {self.devices[idx]}\n")
             print("Options:")
             print("(v): view mapping")
@@ -250,34 +280,48 @@ class DeviceMenu:
             if inp_opt == "b":
                 return
             elif inp_opt == "v":
-                # FIXME
-                print("Not implemented...")
-                time.sleep(2)
+                self.view_mapping()
+                continue
             else:
-                os.system("clear")
                 to_map = whole_menu[int(inp_opt)]
                 device_identifier = meta.uniq or meta.phys_id or meta.name
 
-                for jdx, n in enumerate(list(X360Surfaces)):
-                    print(f"({jdx}). {n.value[0]}")
-                print()
-                inp_opt_map = int(input("Select option: "))
+                x_out_mapping = self.xbox_mapping_view()
                 mapping = InputMapping(
                     device_identifier=device_identifier,
-                    cap_type=event_type_code,
-                    cap_code=capability_code,
-                    x360_out=X360Surfaces(list(X360Surfaces)[inp_opt_map]),
+                    cap_type=to_map[2],
+                    cap_code=to_map[1],
+                    x360_out=x_out_mapping,
                 )
                 self.mapping[str(mapping)] = mapping
-                print(self.mapping.keys())
-                time.sleep(1)
+                self.mapping_to_file()
 
-            # except e as Error:
-            #     print(e)
-            #     time.sleep(12)
+    def xbox_mapping_view(self):
+        os.system("clear")
+        for idx, n in enumerate(list(X360Surfaces)):
+            print(f"({idx}). {n.value[0]}")
+        print()
+        inp_opt_map = int(input("Select option: "))
+        return X360Surfaces(list(X360Surfaces)[inp_opt_map])
 
-            #     # FIXME properly catch
-            #     return
+    def view_mapping(self):
+        while True:
+            os.system("clear")
+            print("Options:")
+            print("(b): back")
+            print()
+            # Print out mapping
+            for m in self.mapping.values():
+                m: InputMapping
+                print("---")
+                print(f"name (device): {m.device_identifier}")
+                print(f"name (in): {ecodes.bytype[m.cap_type][m.cap_code]}")
+                print(f"out: {m.x360_out.value[0]}")
+                print("---")
+            print()
+            inp_opt = input("Choose option: ")
+            if inp_opt == "b":
+                return
 
 
 # Example usage
