@@ -33,6 +33,19 @@ class X360Surfaces(Enum):
     RIGHT_JOYSTICK_X = ("RIGHT_JOYSTICK_X", ecodes.ABS_RZ)
     RIGHT_JOYSTICK_Y = ("RIGHT_JOYSTICK_Y", ecodes.ABS_Z)
 
+    def is_axis(self):
+        return X360Surfaces[self.name] in (
+            X360Surfaces.LEFT_TRIGGER,
+            X360Surfaces.RIGHT_TRIGGER,
+            X360Surfaces.LEFT_JOYSTICK_X,
+            X360Surfaces.LEFT_JOYSTICK_Y,
+            X360Surfaces.RIGHT_JOYSTICK_X,
+            X360Surfaces.RIGHT_JOYSTICK_Y,
+        )
+
+    def is_button(self):
+        return not self.is_axis()
+
 
 @dataclass
 class BitPackedButton:
@@ -67,7 +80,7 @@ class JoystickAxis:
     value: int = 0
 
     def to_i16(self) -> int:
-        return max(-32768, min(32767, self.value))
+        return max(-32767, min(32767, self.value))
 
 
 @dataclass
@@ -173,7 +186,9 @@ class XboxControllerState:
 
         return bytes(packet)
 
-    def by_enum(self, enum_member: X360Surfaces):
+    def by_enum(
+        self, enum_member: X360Surfaces
+    ) -> Axis | JoystickAxis | BitPackedButton:
         """Return the corresponding controller attribute for the given X360Surfaces enum."""
         mapping = {
             X360Surfaces.A: self.buttons.a,

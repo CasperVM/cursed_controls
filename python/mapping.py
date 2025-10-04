@@ -1,20 +1,62 @@
 #!/usr/bin/env python3
 
 import asyncio
+import ctypes
 from dataclasses import dataclass, field
+from enum import Enum
 import json
 
 import sys
 
+import time
 from typing import Dict, Generator, List
 import evdev
 from evdev import ecodes
-from evdev.ecodes import ABS
 import os
-
 from pathlib import Path
+from x360 import Axis, BitPackedButton, JoystickAxis, X360Surfaces, XboxControllerState
 
-from x360 import X360Surfaces
+
+### C MAPPINGS
+
+# Xbox Emu
+# Path to shared lib
+LIB_PATH = os.path.join("360-w-raw-gadget", "lib360wgadget.so")
+
+# Load the shared library
+lib = ctypes.CDLL(LIB_PATH)
+
+# Declare function signatures
+lib.init_360_gadget.argtypes = [ctypes.c_bool, ctypes.c_int]
+lib.init_360_gadget.restype = ctypes.c_int
+
+lib.close_360_gadget.argtypes = [ctypes.c_int]
+lib.close_360_gadget.restype = None
+
+lib.send_to_ep.argtypes = [
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_size_t,
+]
+lib.send_to_ep.restype = ctypes.c_bool
+
+
+# Python wrappers
+def init_360_gadget(await_endpoint_availability: bool, n_interfaces: int) -> int:
+    return lib.init_360_gadget(await_endpoint_availability, n_interfaces)
+
+
+def close_360_gadget(fd: int) -> None:
+    lib.close_360_gadget(fd)
+
+
+def send_to_ep(fd: int, n: int, data: bytes) -> bool:
+    arr = (ctypes.c_ubyte * len(data))(*data)
+    return lib.send_to_ep(fd, n, arr, len(data))
+
+
+###
 
 
 @dataclass
@@ -165,6 +207,19 @@ def build_parent_device_tree():
     return list(parent_nodes.values())
 
 
+# Mapping strategies/conversion classes
+class ButtonToJoystickAxis(Enum):
+    MAX_OUT = "MAX_OUT"
+    MIN_OUT = "MIN_OUT"
+    MIN_TO_MAX = "MIN_TO_MAX"  # No button press = MIN
+    MAX_TO_MIN = "MAX_TO_MIN"  # No button press = MAX
+
+    def __init__(self, value):
+        if not value:
+            super().__init__("MAX_OUT")
+        super().__init__()
+
+
 @dataclass
 class InputMapping:
     device_identifier: str
@@ -172,6 +227,8 @@ class InputMapping:
     cap_type: int
     cap_code: int
     x360_out: X360Surfaces
+    button_to_joystick: ButtonToJoystickAxis | None = None
+    input_axis_absinfo: evdev.AbsInfo | None = None
 
     def __str__(self):
         return f"{self.device_identifier}-{self.cap_type}-{self.cap_code}-{self.x360_out.value[0]}"
@@ -182,11 +239,22 @@ class InputMapping:
             "cap_type": self.cap_type,
             "cap_code": self.cap_code,
             "x360_out": self.x360_out.value[0],
+            "button_to_joystick": self.button_to_joystick.value,
+            "input_axis_absinfo": None # FIXME...
         }
 
     @classmethod
-    def from_dict(cls, d):
-        cls.__init__(**{**d, "x360_out": X360Surfaces(d["x360_out"])})
+    def from_dict(cls, d: dict):
+        cls.__init__(
+            **{
+                **d,
+                "x360_out": X360Surfaces(d["x360_out"]),
+                "button_to_joystick": ButtonToJoystickAxis(
+                    d.get("button_to_joystick", None)
+                ),
+                "input_axis_absinfo": None
+            }
+        )
 
 
 class DeviceMenu:
@@ -324,9 +392,181 @@ class DeviceMenu:
                 return
 
 
+def use_mapping_file(in_name: str, debug_print=False, dry_run=False):
+    """
+    Loops forever.
+    debug_mode: Print packet upon change, but don't sen
+    dry_run: Do not create virtual usb device (e.g. when testing outside of a raspi).
+
+    FIXME: device disconnects
+    FIXME: loop through mapping strategies and assign them before looping (no lazy eval?)
+    TODO: Trigger axis strategies? (direct value/different default value)
+    TODO: Multiple output states/controllers
+    TODO: Rumble
+    """
+
+    # Initialize device
+    fd = None
+    if not dry_run:
+        fd = init_360_gadget(True, 1)
+
+    try:
+        # Read json mapping
+        json_mappings = None
+        with open(in_name) as file_mapping:
+            json_mappings = json.loads("\n".join(file_mapping.readlines()))
+        if json_mappings == None:
+            raise ValueError()
+        mappings: list[InputMapping] = [
+            InputMapping(
+                device_identifier=m.get("device_identifier"),
+                cap_type=m.get("cap_type"),
+                cap_code=m.get("cap_code"),
+                x360_out=X360Surfaces[m.get("x360_out")],
+                button_to_joystick=m.get("button_to_joystick"),
+            )
+            for m in json_mappings
+        ]
+        print(mappings)
+
+        # Singular controller state (for now)
+        xboxstate = XboxControllerState()
+        last_packet = xboxstate.to_packet()
+
+        # Loop through current devices dynamically and assign the proper mappings.
+        get_devices = lambda: list(
+            map(
+                lambda x: (
+                    evdev.InputDevice(x),
+                    device_path_to_meta(evdev.InputDevice(x)),
+                ),
+                evdev.list_devices(),
+            )
+        )
+        all_devices = get_devices()
+        start_time = time.perf_counter_ns()
+        while True:
+            try:
+                for d, meta in all_devices:
+                    # Match witht the inputmapping ident.
+                    ident = meta.uniq or meta.phys_id or meta.name
+                    # Applicable mappings for this current device.
+                    current_device_mappings = filter(
+                        lambda x: x.device_identifier == ident, mappings
+                    )
+                    # Await next event.
+                    event: evdev.InputEvent = d.read_one()
+                    if event == None:
+                        continue
+
+                    # Process by matching
+                    # categorized_event = evdev.categorize(event)
+                    if current_event_mappings := list(
+                        filter(
+                            lambda x: x.cap_type == event.type
+                            and x.cap_code == event.code,
+                            current_device_mappings,
+                        )
+                    ):
+                        current_event_mapping = current_event_mappings[0]
+
+                        # key to key
+                        if (
+                            current_event_mapping.cap_type == ecodes.EV_KEY
+                            and current_event_mapping.x360_out.is_button()
+                        ):
+                            # Update the state.
+                            button: BitPackedButton = xboxstate.by_enum(
+                                current_event_mapping.x360_out
+                            )
+                            button.value = 0
+                            # might be 2 on repeat.
+                            if event.value > 0:
+                                button.value = 1
+                        # key to axis
+                        elif (
+                            current_event_mapping.cap_type == ecodes.EV_KEY
+                            and current_event_mapping.x360_out.is_axis()
+                        ):
+                            match current_event_mapping.x360_out:
+                                case (
+                                    X360Surfaces.LEFT_TRIGGER
+                                    | X360Surfaces.RIGHT_TRIGGER
+                                ):
+                                    # 0-255
+                                    # simple, just max it out.
+                                    trigger_axis: Axis = xboxstate.by_enum(
+                                        current_event_mapping.x360_out
+                                    )
+                                    trigger_axis.value = 0
+                                    # might be 2 on repeat
+                                    if event.value > 0:
+                                        trigger_axis = 255
+                                case _:
+                                    # -32767 - 0 - 32767
+                                    joystick_axis: JoystickAxis = xboxstate.by_enum(
+                                        current_event_mapping.x360_out
+                                    )
+
+                                    match current_event_mapping.button_to_joystick:
+                                        case ButtonToJoystickAxis.MAX_OUT | None:
+                                            joystick_axis.value = 0
+                                            if event.value > 0:
+                                                joystick_axis.value = 32767
+                                        case ButtonToJoystickAxis.MIN_OUT:
+                                            joystick_axis.value = 0
+                                            if event.value > 0:
+                                                joystick_axis.value = -32767
+                                        case ButtonToJoystickAxis.MIN_TO_MAX:
+                                            joystick_axis.value = -32767
+                                            if event.value > 0:
+                                                joystick_axis.value = 32767
+                                        case ButtonToJoystickAxis.MAX_TO_MIN:
+                                            joystick_axis.value = 32767
+                                            if event.value > 0:
+                                                joystick_axis.value = -32767
+
+                        # TODO:
+                        # axis to axis
+                        ## Dynamic abs info?/dyn calib.
+                        elif (
+                            current_event_mapping.cap_type == ecodes.EV_ABS
+                            and current_event_mapping.x360_out.is_axis()
+                        ):
+                            print(event)
+                        # axis to key
+                        ## Threshold values? e.g. 10% deadzone -> press
+
+                    # send or print out the current state on update.
+                    if last_packet != xboxstate.to_packet():
+                        last_packet = xboxstate.to_packet()
+                        if debug_print:
+                            print(last_packet)
+                        if not dry_run:
+                            send_to_ep(fd, 0, last_packet)
+            except:
+                # some error occured, probably device disconnect?
+                # reload devices.
+                all_devices = get_devices()
+            finally:
+                # time how long we took, and sleep slightly less than 1 ms. (900)
+                end_time = time.perf_counter_ns()
+                elapsed_s = (end_time - start_time) / 1_000_000_000
+                target_s = 0.001
+                max_sleep_s = 0.00095
+                time_to_sleep = max(0, min(target_s - elapsed_s, max_sleep_s))
+                time.sleep(time_to_sleep)
+                start_time = time.perf_counter_ns()
+    finally:
+        if fd:
+            close_360_gadget(fd)
+
+
 # Example usage
 async def main():
-    DeviceMenu().main_menu()
+    # DeviceMenu().main_menu()
+
+    use_mapping_file("out.json", dry_run=True, debug_print=True)
 
 
 if __name__ == "__main__":
