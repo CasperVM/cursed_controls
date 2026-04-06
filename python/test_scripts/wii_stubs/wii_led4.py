@@ -14,7 +14,7 @@ import sys
 
 # ----------------- helpers -----------------
 def errno_str(code):
-    return f"{code} ({errno.errorcode.get(abs(code),'?')}): {os.strerror(abs(code))}"
+    return f"{code} ({errno.errorcode.get(abs(code), '?')}): {os.strerror(abs(code))}"
 
 
 def find_hid_syspath_from_event(event_node):

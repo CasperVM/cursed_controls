@@ -1,57 +1,37 @@
 # Raspbian setup
 
-Tested on Raspberry Pi Zero / Raspberry Pi Zero 2
+Tested on Raspberry Pi Zero 2W (64-bit Raspberry Pi OS).
 
-Before proceeding, make sure you're using a 32-bit Raspberry Pi OS image (if using the pi zero/zero 2). This is mainly to avoid slow builds because of HW limitations.
-Make sure the system is up to date:
+## System dependencies
 
 ```bash
 sudo apt update -y && sudo apt upgrade -y
+sudo apt install -y git python3-venv bluetooth bluez \
+    libtool autoconf automake m4 libudev-dev libncurses5-dev \
+    linux-headers-rpi-v8
 ```
 
-And install the required dependencies:
+Details:
+- `xwiimote` dependencies: `libtool autoconf automake m4 libudev-dev libncurses5-dev`
+- `raw-gadget` dependency: `linux-headers-rpi-v8` (use `rpi-{v6,v7,v7l}` on 32-bit)
 
-If using a 32-bit OS:
+## Bluetooth / Wiimote
 
-```bash
-sudo apt install -y git libtool autoconf automake m4 libudev-dev libncurses5-dev vim clang linux-headers-rpi-{v6,v7,v7l}
-```
-
-64-bit OS, e.g. Raspberry Pi 4:
-
-```bash
-sudo apt install -y git libtool autoconf automake m4 libudev-dev libncurses5-dev vim clang linux-headers-rpi-v8
-```
-
-details:
-
-```bash
-# xwiimote depends on:
-#  libtool autoconf automake m4 libudev-dev libncurses5-dev
-# raw-gadget depends on:
-#  linux-headers-rpi-{v6,v7,v7l} vim
-# this project depends on:
-#  clang
-# misc:
-#  git
-```
-
-Add a udev rule for wiimote input reading:
+Add a udev rule so evdev devices are readable without root:
 
 ```bash
 echo 'KERNEL=="uinput", MODE="0666"' | sudo tee -a /etc/udev/rules.d/wiimote.rules
 sudo service udev restart
 ```
 
-Edit bluez config to use `ClassicBondedOnly=false`, which helps keep wii motes connected.
+Disable the `ClassicBondedOnly` restriction in BlueZ so Wiimotes stay connected:
 
 ```bash
 echo 'ClassicBondedOnly=false' | sudo tee -a /etc/bluetooth/input.conf
 sudo service bluetooth restart
 ```
 
-We could install `xwiimote-lib` as a system package, but I've found this does not work reliably for whatever reason.
-Building it from scratch works just fine however:
+Build and install `xwiimote`:
 
 ```bash
 cd ~
@@ -62,117 +42,121 @@ make -j
 sudo make install
 ```
 
-Now we need to enable the Pi's OTG functionality and install `raw-gadget` so we can [fake an xbox controller as our output.](https://github.com/Berghopper/360-w-raw-gadget)
+## USB OTG / raw-gadget
+
+Enable the USB OTG overlay:
 
 ```bash
 echo "dtoverlay=dwc2" | sudo tee -a /boot/firmware/config.txt
 echo "dwc2" | sudo tee -a /etc/modules
+```
 
+Build and install raw-gadget:
+
+```bash
 cd ~
 git clone https://github.com/xairy/raw-gadget.git
 cd ~/raw-gadget/raw_gadget
 make -j
 ```
 
-Now for this project:
+## Get cursed_controls
 
 ```bash
 cd ~
 git clone https://github.com/Berghopper/cursed_controls.git
 cd cursed_controls
-
-# First build 360 emulation module
-git submodule sync
 git submodule update --init --recursive
-cd src/360-w-raw-gadget
 ```
 
-Now depending on your hardware, refer to [360-w-raw-gadget](https://github.com/Berghopper/360-w-raw-gadget)'s table for making the projet.
+## Build the gadget library
 
-e.g. pi zero:
+Install Rust if not already present:
+
 ```bash
-make clean && make -j
-```
-or pi zero 2:
-```bash
-make clean && make -j rpi0_2
-```
-continue:
-```bash
-# Get rust
-# First set variable for 1 cpu only, because of low memory.
-# see; https://github.com/rust-lang/rustup/issues/2919
+# Set RUSTUP_IO_THREADS=1 on Pi Zero to avoid OOM during install
 export RUSTUP_IO_THREADS=1
-env RUSTUP_IO_THREADS=1 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+```
 
-# build (for an hour on the pi0/20 minutes on pi0 v2. should perhaps cross-compile/add binary releases...)
-cd ~/cursed_controlers
+Build the shared library:
+
+```bash
+cd ~/cursed_controls/python/360-w-raw-gadget
 cargo build --release
+# produces: target/release/libx360_w_raw_gadget.so
 ```
 
-At this point, if you haven't yet. Reboot.
-
-After Reboot, you can run the `init-raspbian.sh` script from the repo
+## Python setup
 
 ```bash
-cd ~/cursed_controls
+cd ~/cursed_controls/python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+## Reboot
+
+Reboot after enabling the OTG overlay and adding kernel modules:
+
+```bash
+sudo reboot
+```
+
+## Load kernel modules
+
+After reboot, load the required modules (or use the provided script):
+
+```bash
 ./init-raspbian.sh
+# which runs:
+#   sudo modprobe uinput
+#   sudo modprobe hid-wiimote
+#   cd ~/raw-gadget/raw_gadget && sudo ./insmod.sh
 ```
 
-Or alternatively:
+## Running
+
+Connect your Wiimote via Bluetooth:
 
 ```bash
-sudo modprobe uinput
-sudo modprobe hid-wiimote
-cd ~/raw-gadget/raw_gadget/
-sudo ./insmod.sh
+bluetoothctl
+# scan on
+# connect <WIIMOTE-MAC>
 ```
 
-To run cursed controls:
+Run cursed_controls (needs root for raw-gadget):
 
 ```bash
-cd ~/cursed_controls
-sudo ./target/release/cursed_controls
+cd ~/cursed_controls/python
+source .venv/bin/activate
+sudo .venv/bin/cursed-controls run example_wiimote.yaml
 ```
 
-## Known issues
-
-Some libraries/pacakges might interfere with `xwiimote`, to ensure this is the case, try an install from scratch following this guide.
-
-## Power issues over USB
-
-For the Raspberry Pi zero 2, you might find the following config helpful to save energy (if running in headless mode):
+## Power saving (Pi Zero 2W headless)
 
 `/boot/firmware/config.txt`:
 
 ```toml
 [all]
-# stable OC
-#arm_freq=1300
-#over_voltage=6
-
 dtoverlay=dwc2
 
 # Power save
-# Enable Bluetooth and WiFi
 dtoverlay=disable-bt=off
 dtoverlay=disable-wifi=off
-
-# Disable HDMI to save power
 hdmi_blanking=1
 hdmi_ignore_hotplug=1
-
-# Disable the camera and display auto-detect to save power
 camera_auto_detect=0
 display_auto_detect=0
-
-# Audio is not typically needed for headless or low-power setups
 dtparam=audio=off
-
-# Reduce GPU memory to the minimum
 gpu_mem=16
-
-# Disable LEDs to reduce power consumption
 dtparam=act_led_trigger=none
 dtparam=act_led_activelow=on
 ```
+
+## Known issues
+
+- Some system packages may conflict with `xwiimote`. A clean install following this guide is the most reliable approach.
+- On 32-bit OS, replace `linux-headers-rpi-v8` with `linux-headers-rpi-{v6,v7,v7l}`.

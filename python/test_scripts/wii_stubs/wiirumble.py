@@ -6,7 +6,7 @@ from pathlib import Path
 
 # ----------------- helpers -----------------
 def errno_str(code):
-    return f"{code} ({errno.errorcode.get(abs(code),'?')}): {os.strerror(abs(code))}"
+    return f"{code} ({errno.errorcode.get(abs(code), '?')}): {os.strerror(abs(code))}"
 
 
 def find_hid_syspath_from_event(event_node):
@@ -142,12 +142,12 @@ def main(event_node="/dev/input/event4"):
 
         print("Measuring rumble ON...")
         t_on = rum.rumble_on()
-        print(f"Rumble ON API call took {t_on*1000:.3f} ms")
+        print(f"Rumble ON API call took {t_on * 1000:.3f} ms")
         time.sleep(1)
 
         print("Measuring rumble OFF...")
         t_off = rum.rumble_off()
-        print(f"Rumble OFF API call took {t_off*1000:.3f} ms")
+        print(f"Rumble OFF API call took {t_off * 1000:.3f} ms")
         time.sleep(1)
 
         input("Press Enter to start 10s strength demo with ramp smoothing...")

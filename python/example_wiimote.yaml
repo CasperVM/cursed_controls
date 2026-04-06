@@ -1,0 +1,117 @@
+## Example config: Nintendo Wii Remote + Nunchuk → Xbox 360
+##
+## Requires wiimote connected via bluetooth (xwiimote or similar).
+## Device names/uniq will vary, run `cursed-controls list-devices` to find yours
+## and replace the `name:` fields with your actual device identifiers.
+##
+## Event codes sourced from wii_capabilities.md (real hardware capture).
+## EV_KEY = 1, EV_ABS = 3
+
+runtime:
+  output_mode: gadget          # use "stdout" for dry-run/debugging
+  gadget_library: 360-w-raw-gadget/target/release/libx360_w_raw_gadget.so
+  gadget_driver: 3f980000.usb
+  interfaces: 1
+  rumble: true
+
+devices:
+  - id: wiimote
+    match:
+      name: "Nintendo Wii Remote"
+    mappings:
+      # Face buttons
+      - source_type: 1   # EV_KEY
+        source_code: 304  # BTN_A
+        target: A
+        kind: button
+
+      - source_type: 1
+        source_code: 305  # BTN_B
+        target: B
+        kind: button
+
+      - source_type: 1
+        source_code: 257  # BTN_1
+        target: X
+        kind: button
+
+      - source_type: 1
+        source_code: 258  # BTN_2
+        target: Y
+        kind: button
+
+      # Menu buttons
+      - source_type: 1
+        source_code: 407  # KEY_NEXT  (+ button)
+        target: START
+        kind: button
+
+      - source_type: 1
+        source_code: 412  # KEY_PREVIOUS  (- button)
+        target: OPTIONS
+        kind: button
+
+      - source_type: 1
+        source_code: 316  # BTN_MODE  (home button)
+        target: XBOX
+        kind: button
+
+      # D-Pad (reported as EV_KEY on wiimote, not hat)
+      - source_type: 1
+        source_code: 103  # KEY_UP
+        target: DPAD_UP
+        kind: button
+
+      - source_type: 1
+        source_code: 108  # KEY_DOWN
+        target: DPAD_DOWN
+        kind: button
+
+      - source_type: 1
+        source_code: 105  # KEY_LEFT
+        target: DPAD_LEFT
+        kind: button
+
+      - source_type: 1
+        source_code: 106  # KEY_RIGHT
+        target: DPAD_RIGHT
+        kind: button
+
+  - id: nunchuk
+    match:
+      name: "Nintendo Wii Remote Nunchuk"
+    mappings:
+      # Nunchuk buttons
+      - source_type: 1
+        source_code: 306  # BTN_C
+        target: BUMPER_L
+        kind: button
+
+      - source_type: 1
+        source_code: 309  # BTN_Z
+        target: LEFT_TRIGGER
+        kind: button
+        on_value: 255
+        off_value: 0
+
+      # Nunchuk joystick (ABS_HAT0X/Y, range -120..120)
+      - source_type: 3   # EV_ABS
+        source_code: 16   # ABS_HAT0X
+        target: LEFT_JOYSTICK_X
+        kind: axis
+        source_min: -120
+        source_max: 120
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.05
+
+      - source_type: 3
+        source_code: 17   # ABS_HAT0Y
+        target: LEFT_JOYSTICK_Y
+        kind: axis
+        source_min: -120
+        source_max: 120
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.05
+        invert: true       # nunchuk Y axis is typically inverted

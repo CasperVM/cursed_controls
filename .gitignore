@@ -22,3 +22,11 @@ Cargo.lock
 
 
 .vscode
+
+# Python
+python/.venv/
+**/__pycache__/
+**/*.egg-info/
+python/.pytest_cache/
+python/dist/
+python/build/
