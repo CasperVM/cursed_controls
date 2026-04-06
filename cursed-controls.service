@@ -1,0 +1,20 @@
+[Unit]
+Description=cursed-controls gamepad mapper
+After=bluetooth.target multi-user.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__INSTALL_HOME__/cursed_controls
+EnvironmentFile=-/etc/cursed-controls.env
+Environment=CC_CONFIG=__INSTALL_HOME__/cursed_controls/mapping.yaml
+ExecStartPre=/bin/bash __INSTALL_HOME__/cursed_controls/init-raspbian.sh
+ExecStart=__INSTALL_HOME__/cursed_controls/.venv/bin/python -u -m cursed_controls.cli run ${CC_CONFIG}
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

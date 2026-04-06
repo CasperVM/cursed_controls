@@ -1,0 +1,38 @@
+# TV remote: Wii Remote held vertically (no Nunchuk)
+#
+# Hold the Wiimote like a TV remote, pointing at the screen.
+#
+#   D-pad         → D-pad (navigation)
+#   A             → A     (confirm/select)
+#   B (trigger)   → B     (back/cancel)
+#   1             → X
+#   2             → Y
+#   +             → Start
+#   -             → Options/Back
+#   Home          → Xbox guide button
+
+runtime:
+  output_mode: gadget
+  gadget_library: 360-w-raw-gadget/target/release/libx360_w_raw_gadget.so
+  interfaces: 1
+  rumble: true
+
+devices:
+  - id: wiimote
+    connection:
+      type: wiimote
+      timeout_s: 60
+    match:
+      name: "Nintendo Wii Remote"
+    mappings:
+      - {source_type: 1, source_code: 304, target: A,          kind: button}  # BTN_A  → confirm
+      - {source_type: 1, source_code: 305, target: B,          kind: button}  # BTN_B  → back
+      - {source_type: 1, source_code: 257, target: X,          kind: button}  # BTN_1
+      - {source_type: 1, source_code: 258, target: Y,          kind: button}  # BTN_2
+      - {source_type: 1, source_code: 407, target: START,      kind: button}  # KEY_NEXT  (+)
+      - {source_type: 1, source_code: 412, target: OPTIONS,    kind: button}  # KEY_PREVIOUS (-)
+      - {source_type: 1, source_code: 316, target: XBOX,       kind: button}  # BTN_MODE (Home)
+      - {source_type: 1, source_code: 103, target: DPAD_UP,    kind: button}  # KEY_UP
+      - {source_type: 1, source_code: 108, target: DPAD_DOWN,  kind: button}  # KEY_DOWN
+      - {source_type: 1, source_code: 105, target: DPAD_LEFT,  kind: button}  # KEY_LEFT
+      - {source_type: 1, source_code: 106, target: DPAD_RIGHT, kind: button}  # KEY_RIGHT

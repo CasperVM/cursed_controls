@@ -2,11 +2,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import selectors
+import time
 from typing import Iterable
 
 import evdev
 
-from cursed_controls.config import AppConfig, DeviceProfile, MappingRule, TransformKind
+from cursed_controls.bluetooth import (
+    connect_device,
+    connect_wiimote,
+    scan_for_wiimote,
+    wait_for_evdev,
+)
+from cursed_controls.config import (
+    AppConfig,
+    ConnectionType,
+    DeviceProfile,
+    MappingRule,
+    TransformKind,
+)
 from cursed_controls.discovery import DiscoveredDevice, list_devices
 from cursed_controls.output import OutputSink
 from cursed_controls.rumble import ForceFeedback
@@ -191,6 +204,8 @@ class Runtime:
         self.mapper = Mapper(config)
         self.selector = selectors.DefaultSelector()
         self.bound_by_fd: dict[int, BoundDevice] = {}
+        self.pending_profiles: list[DeviceProfile] = []
+        self._last_rescan: float = 0.0
 
     def plan_bindings(
         self, devices: Iterable[DiscoveredDevice] | None = None
@@ -238,6 +253,8 @@ class Runtime:
             return False
         except OSError:
             self.unregister_bound_device(bound)
+            self.pending_profiles.append(bound.profile)
+            print(f"[{bound.profile.id}] disconnected, will retry")
             return False
 
         for event in events:
@@ -246,16 +263,86 @@ class Runtime:
             changed = self.mapper.process_event(bound.profile, event) or changed
         return changed
 
+    def _already_in_evdev(self, profile: DeviceProfile) -> bool:
+        """Return True if a device matching this profile is already in /dev/input/."""
+        available = list_devices()
+        return any(_matches(profile, d) for d in available)
+
+    def _pre_connect(self) -> None:
+        for profile in self.config.devices:
+            conn = profile.connection
+            if conn.type == ConnectionType.WIIMOTE:
+                if self._already_in_evdev(profile):
+                    print(f"[{profile.id}] Wiimote already connected, skipping scan")
+                    continue
+                print(f"[{profile.id}] Waiting for Wiimote (press 1+2 or Sync)...")
+                mac = scan_for_wiimote(conn.timeout_s, conn.mac)
+                if mac:
+                    connect_wiimote(mac, timeout=10.0)
+                    if profile.match.name:
+                        wait_for_evdev(profile.match.name, timeout=10.0)
+                else:
+                    print(f"[{profile.id}] Wiimote not found, will retry")
+            elif conn.type == ConnectionType.BLUETOOTH:
+                if self._already_in_evdev(profile):
+                    print(f"[{profile.id}] already connected, skipping")
+                    continue
+                print(f"[{profile.id}] Connecting {conn.mac}...")
+                if conn.mac:
+                    connect_device(conn.mac, conn.timeout_s)
+                if profile.match.name:
+                    wait_for_evdev(profile.match.name, timeout=10.0)
+            # evdev: nothing to do, rescan loop will find it
+
+    def _claimed_paths(self) -> set[str]:
+        return {b.info.path for b in self.bound_by_fd.values()}
+
+    def _try_bind_pending(self) -> None:
+        available = list_devices()
+        claimed = self._claimed_paths()
+        still_pending = []
+        for profile in self.pending_profiles:
+            matches = [
+                d for d in available if _matches(profile, d) and d.path not in claimed
+            ]
+            if not matches:
+                still_pending.append(profile)
+                continue
+            if len(matches) > 1:
+                # Composite devices (e.g. Wiimote) create multiple nodes with the
+                # same name. Prefer the composite parent; skip if ambiguous.
+                parents = [d for d in matches if d.is_composite_parent]
+                if len(parents) == 1:
+                    matches = parents
+                else:
+                    still_pending.append(profile)
+                    continue
+            planned = PlannedBinding(profile=profile, info=matches[0])
+            bound = self.open_bindings([planned])
+            self.register_bound_devices(bound)
+            claimed.add(matches[0].path)
+            print(f"[{profile.id}] bound to {matches[0].path}")
+        self.pending_profiles = still_pending
+
+    def _rescan_if_due(self) -> None:
+        if not self.pending_profiles:
+            return
+        interval = self.config.runtime.rescan_interval_ms / 1000.0
+        if time.monotonic() - self._last_rescan >= interval:
+            self._try_bind_pending()
+            self._last_rescan = time.monotonic()
+
     def run(self) -> None:
-        planned = self.plan_bindings()
-        bound = self.open_bindings(planned)
-        self.register_bound_devices(bound)
+        self._pre_connect()
+        self.pending_profiles = list(self.config.devices)
+        self._try_bind_pending()
         self.sink.open()
         try:
             while True:
                 if self.drain_ready(timeout=0.01):
                     self.sink.send(self.mapper.state)
                 self._dispatch_rumble()
+                self._rescan_if_due()
         finally:
             self._stop_all_rumble()
             for item in list(self.bound_by_fd.values()):

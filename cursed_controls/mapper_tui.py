@@ -5,6 +5,7 @@ import select
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 import evdev
 import yaml
@@ -79,6 +80,47 @@ class InputDetector:
                 pass
             self._grabbed = False
 
+    def calibrate_axis(self, code: int, duration_s: float = 4.0) -> tuple[int, int]:
+        """Watch axis `code` and return the (min, max) values actually observed.
+
+        Falls back to absinfo declared range if no events arrive or the device
+        doesn't move far enough to exceed the inverted sentinels.
+        """
+        try:
+            info = self._device.absinfo(code)
+            # Start inverted so any real reading beats the sentinels
+            obs_min, obs_max = info.max, info.min
+        except Exception:
+            obs_min, obs_max = 0, 0
+
+        deadline = time.monotonic() + duration_s
+        self._try_grab()
+        try:
+            while time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                r, _, _ = select.select([self._device.fd], [], [], min(remaining, 0.1))
+                if not r:
+                    continue
+                try:
+                    for event in self._device.read():
+                        if event.type == ecodes.EV_ABS and event.code == code:
+                            obs_min = min(obs_min, event.value)
+                            obs_max = max(obs_max, event.value)
+                except BlockingIOError:
+                    pass
+        except OSError:
+            pass
+        finally:
+            self._ungrab()
+
+        if obs_min >= obs_max:
+            try:
+                info = self._device.absinfo(code)
+                return info.min, info.max
+            except Exception:
+                return 0, 0
+        return obs_min, obs_max
+
     def sample_baseline(self, duration_s: float = 0.3) -> dict[int, float]:
         """
         Read EV_ABS events for `duration_s` seconds to establish baseline.
@@ -107,6 +149,7 @@ class InputDetector:
             pass
 
         self.noisy_axes = set()
+        self.axis_drift: dict[int, float] = {}  # observed spread during baseline
         baseline: dict[int, float] = {}
 
         for code, vals in samples.items():
@@ -117,6 +160,7 @@ class InputDetector:
                 noise_threshold = max(abs_info.flat * 2, span * 0.05) if span > 0 else 1
                 if spread > noise_threshold:
                     self.noisy_axes.add(code)
+                    self.axis_drift[code] = spread
                 baseline[code] = sum(vals) / len(vals)
             except Exception:
                 pass
@@ -130,7 +174,7 @@ class InputDetector:
         Watch for intentional input for up to `duration_s` seconds.
         Returns the highest-confidence CandidateEvent, or None.
         Buttons (EV_KEY value=1) return immediately (confidence=1.0).
-        Noisy axes are ignored entirely.
+        Noisy axes require larger movement to register (beyond their baseline drift).
         """
         best: CandidateEvent | None = None
         deadline = time.monotonic() + duration_s
@@ -167,7 +211,7 @@ class InputDetector:
         if event.type == ecodes.EV_KEY and event.value == 1:
             return CandidateEvent(ecodes.EV_KEY, event.code, 1, 1.0, None)
 
-        if event.type == ecodes.EV_ABS and event.code not in self.noisy_axes:
+        if event.type == ecodes.EV_ABS:
             try:
                 abs_info = self._device.absinfo(event.code)
             except Exception:
@@ -177,7 +221,12 @@ class InputDetector:
                 return None
             midpoint = baseline.get(event.code, (abs_info.min + abs_info.max) / 2)
             delta = abs(event.value - midpoint)
-            threshold = max(abs_info.flat * 3, span * 0.15)
+            # For noisy axes, require movement well beyond the observed baseline drift
+            if event.code in self.noisy_axes:
+                drift = self.axis_drift.get(event.code, span * 0.05)
+                threshold = max(drift * 2, span * 0.25)
+            else:
+                threshold = max(abs_info.flat * 3, span * 0.15)
             if delta >= threshold:
                 confidence = min(delta / (span / 2), 1.0)
                 return CandidateEvent(
@@ -196,7 +245,11 @@ class SmartDefaults:
     """Infers transform fields from a detected event and a target Surface."""
 
     @staticmethod
-    def infer(candidate: CandidateEvent, target: Surface) -> dict:
+    def infer(
+        candidate: CandidateEvent,
+        target: Surface,
+        calibrated_range: tuple[int, int] | None = None,
+    ) -> dict:
         base: dict = {
             "source_type": candidate.ev_type,
             "source_code": candidate.ev_code,
@@ -222,13 +275,15 @@ class SmartDefaults:
             return {**base, "kind": "button", "threshold": 1}
 
         deadzone = round(abs_info.flat / span, 3) if span > 0 else 0.0
+        src_min = calibrated_range[0] if calibrated_range else abs_info.min
+        src_max = calibrated_range[1] if calibrated_range else abs_info.max
 
         if target in _TRIGGER_SURFACES:
             return {
                 **base,
                 "kind": "axis",
-                "source_min": abs_info.min,
-                "source_max": abs_info.max,
+                "source_min": src_min,
+                "source_max": src_max,
                 "target_min": 0,
                 "target_max": 255,
                 "deadzone": deadzone,
@@ -238,8 +293,8 @@ class SmartDefaults:
             return {
                 **base,
                 "kind": "axis",
-                "source_min": abs_info.min,
-                "source_max": abs_info.max,
+                "source_min": src_min,
+                "source_max": src_max,
                 "target_min": -32767,
                 "target_max": 32767,
                 "deadzone": deadzone,
@@ -319,6 +374,24 @@ class MapperTUI:
         self.output_path = output_path
         self.profiles: list[dict] = []
         self._already_mapped: set[Surface] = set()
+        self._existing_runtime: dict = {"output_mode": "stdout"}
+        self._existing_devices: dict[str, dict] = {}
+
+        if Path(output_path).exists():
+            try:
+                raw = yaml.safe_load(Path(output_path).read_text()) or {}
+                self._existing_runtime = raw.get("runtime", self._existing_runtime)
+                existing_devices = raw.get("devices", [])
+                self._existing_devices = {
+                    d["id"]: d for d in existing_devices if "id" in d
+                }
+                print(f"Loaded existing config: {output_path}")
+                if existing_devices:
+                    ids = ", ".join(d.get("id", "?") for d in existing_devices)
+                    print(f"  {len(existing_devices)} existing profile(s): {ids}")
+                    print("  Re-mapping a profile replaces it; new profiles are appended.")
+            except Exception as e:
+                print(f"Warning: could not load existing config ({e}), starting fresh.")
 
     def run(self) -> None:
         print("cursed-controls map, interactive config builder")
@@ -423,7 +496,7 @@ class MapperTUI:
             baseline = detector.sample_baseline(0.3)
             noisy = [_code_name(ecodes.EV_ABS, c) for c in detector.noisy_axes]
             if noisy:
-                print(f" (ignoring noisy axes: {', '.join(noisy)})", end="")
+                print(f" (high-threshold axes: {', '.join(noisy)})", end="")
             print()
 
             print("  Listening... (3s)", end="", flush=True)
@@ -452,7 +525,20 @@ class MapperTUI:
                 print("  Skipped.")
                 continue
 
-            mapping = SmartDefaults.infer(candidate, surface)
+            calibrated_range = None
+            if (
+                candidate.ev_type == ecodes.EV_ABS
+                and candidate.abs_info is not None
+                and (candidate.abs_info.max - candidate.abs_info.min) > 3
+                and surface in (_JOYSTICK_SURFACES | _TRIGGER_SURFACES)
+            ):
+                print("  Wiggle the axis to its extremes, then press Enter...")
+                input()
+                print("  Calibrating...", end="", flush=True)
+                calibrated_range = detector.calibrate_axis(candidate.ev_code, duration_s=0.3)
+                print(f" observed range: {calibrated_range[0]}..{calibrated_range[1]}")
+
+            mapping = SmartDefaults.infer(candidate, surface, calibrated_range)
 
             # offer invert for axes that moved in the negative direction
             if (
@@ -501,9 +587,14 @@ class MapperTUI:
                 print(f"  Removed mapping [{idx}]")
 
     def _save(self) -> None:
+        # Overlay this session's profiles onto existing ones (keyed by id)
+        merged = dict(self._existing_devices)
+        for profile in self.profiles:
+            merged[profile["id"]] = profile
+
         data = {
-            "runtime": {"output_mode": "stdout"},
-            "devices": self.profiles,
+            "runtime": self._existing_runtime,
+            "devices": list(merged.values()),
         }
         text = yaml.dump(
             data, default_flow_style=False, sort_keys=False, allow_unicode=True
@@ -511,4 +602,5 @@ class MapperTUI:
         with open(self.output_path, "w") as f:
             f.write(text)
         print(f"\nSaved to {self.output_path}")
-        print("Change runtime.output_mode to 'gadget' when ready to run on hardware.")
+        if self._existing_runtime.get("output_mode") == "stdout":
+            print("Change runtime.output_mode to 'gadget' when ready to run on hardware.")

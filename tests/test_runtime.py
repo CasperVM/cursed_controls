@@ -8,6 +8,8 @@ from evdev import ecodes
 
 from cursed_controls.config import (
     AppConfig,
+    ConnectionConfig,
+    ConnectionType,
     DeviceMatch,
     DeviceProfile,
     MappingRule,
@@ -22,6 +24,7 @@ from cursed_controls.runtime import (
     BindingPlanner,
     BoundDevice,
     Mapper,
+    PlannedBinding,
     Runtime,
     _scale,
 )
@@ -352,3 +355,107 @@ def test_runtime_disconnect_unregisters_device():
     assert runtime.drain_ready(0) is False
     assert 12 not in runtime.bound_by_fd
     assert bound.device.closed is True
+
+
+def test_runtime_disconnect_requeues_profile():
+    config = make_config()
+    runtime = Runtime(config, FakeSink())
+    runtime.selector = FakeSelector()
+
+    bound = BoundDevice(
+        profile=config.devices[0],
+        info=make_discovered("/dev/input/event1"),
+        device=FakeInputDevice(fd=12, error=OSError("gone")),
+    )
+
+    runtime.register_bound_devices([bound])
+    runtime.selector.ready = [bound]
+    runtime.drain_ready(0)
+
+    assert config.devices[0] in runtime.pending_profiles
+
+
+def test_try_bind_pending_binds_when_device_appears():
+    from unittest.mock import patch
+
+    config = make_config()
+    runtime = Runtime(config, FakeSink())
+    runtime.selector = FakeSelector()
+    runtime.pending_profiles = list(config.devices)
+
+    discovered = make_discovered("/dev/input/event5")
+
+    fake_dev = FakeInputDevice(fd=20)
+
+    with (
+        patch("cursed_controls.runtime.list_devices", return_value=[discovered]),
+        patch("cursed_controls.runtime.evdev.InputDevice", return_value=fake_dev),
+        patch("cursed_controls.runtime.ForceFeedback") as mock_ff,
+    ):
+        mock_ff.return_value.supported = False
+        runtime._try_bind_pending()
+
+    assert runtime.pending_profiles == []
+    assert 20 in runtime.bound_by_fd
+
+
+def test_try_bind_pending_leaves_unmatched_profiles():
+    from unittest.mock import patch
+
+    config = make_config()
+    runtime = Runtime(config, FakeSink())
+    runtime.selector = FakeSelector()
+    runtime.pending_profiles = list(config.devices)
+
+    # Return a device that doesn't match "test-controller"
+    non_matching = make_discovered("/dev/input/event5", name="some-other-device")
+
+    with patch("cursed_controls.runtime.list_devices", return_value=[non_matching]):
+        runtime._try_bind_pending()
+
+    assert len(runtime.pending_profiles) == 1
+
+
+def test_pre_connect_skips_evdev_profiles():
+    """_pre_connect should not call any BT functions for evdev-type profiles."""
+    from unittest.mock import patch
+
+    config = make_config()
+    runtime = Runtime(config, FakeSink())
+
+    with (
+        patch("cursed_controls.runtime.scan_for_wiimote") as mock_scan,
+        patch("cursed_controls.runtime.connect_device") as mock_connect,
+        patch("cursed_controls.runtime.wait_for_evdev") as mock_wait,
+    ):
+        runtime._pre_connect()
+
+    mock_scan.assert_not_called()
+    mock_connect.assert_not_called()
+    mock_wait.assert_not_called()
+
+
+def test_pre_connect_wiimote_profile_scans_and_connects():
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE, timeout_s=10.0),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+
+    with (
+        patch(
+            "cursed_controls.runtime.scan_for_wiimote",
+            return_value="AA:BB:CC:DD:EE:FF",
+        ) as mock_scan,
+        patch("cursed_controls.runtime.connect_wiimote") as mock_connect,
+        patch("cursed_controls.runtime.wait_for_evdev") as mock_wait,
+    ):
+        runtime._pre_connect()
+
+    mock_scan.assert_called_once_with(10.0, None)
+    mock_connect.assert_called_once_with("AA:BB:CC:DD:EE:FF", timeout=10.0)
+    mock_wait.assert_called_once_with("Nintendo Wii Remote", timeout=10.0)

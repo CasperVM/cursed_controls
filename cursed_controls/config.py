@@ -17,6 +17,19 @@ class TransformKind(str, Enum):
     HAT = "hat"
 
 
+class ConnectionType(str, Enum):
+    EVDEV = "evdev"        # already present in /dev/input (default)
+    BLUETOOTH = "bluetooth"  # paired device, connect by MAC at startup
+    WIIMOTE = "wiimote"    # scan for first Nintendo Wii Remote
+
+
+@dataclass
+class ConnectionConfig:
+    type: ConnectionType = ConnectionType.EVDEV
+    mac: str | None = None     # required for bluetooth, optional for wiimote
+    timeout_s: float = 30.0    # seconds to scan/wait before giving up
+
+
 @dataclass
 class DeviceMatch:
     name: str | None = None
@@ -51,6 +64,7 @@ class DeviceProfile:
     id: str
     match: DeviceMatch
     mappings: list[MappingRule] = field(default_factory=list)
+    connection: ConnectionConfig = field(default_factory=ConnectionConfig)
 
 
 @dataclass
@@ -58,10 +72,11 @@ class RuntimeConfig:
     poll_interval_ms: int = 1
     output_mode: str = "stdout"
     gadget_library: str = "360-w-raw-gadget/target/release/libx360_w_raw_gadget.so"
-    gadget_driver: str = "3f980000.usb"
-    gadget_device: str | None = None  # None → same as gadget_driver
+    gadget_driver: str | None = None  # None = auto-detect from /sys/class/udc/
+    gadget_device: str | None = None  # None = same as gadget_driver
     interfaces: int = 1
     rumble: bool = True  # forward host rumble to physical devices
+    rescan_interval_ms: int = 2000  # how often to retry pending profiles
 
 
 @dataclass
@@ -105,11 +120,18 @@ def load_config(path: str | Path) -> AppConfig:
                     ),
                 )
             )
+        conn_data = device.get("connection", {})
+        connection = ConnectionConfig(
+            type=ConnectionType(conn_data.get("type", ConnectionType.EVDEV)),
+            mac=conn_data.get("mac"),
+            timeout_s=conn_data.get("timeout_s", 30.0),
+        )
         devices.append(
             DeviceProfile(
                 id=device["id"],
                 match=DeviceMatch(**device.get("match", {})),
                 mappings=mappings,
+                connection=connection,
             )
         )
     return AppConfig(runtime=runtime, devices=devices)

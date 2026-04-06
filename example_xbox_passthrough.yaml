@@ -10,7 +10,6 @@
 runtime:
   output_mode: stdout          # change to "gadget" for real USB output
   gadget_library: 360-w-raw-gadget/target/release/libx360_w_raw_gadget.so
-  gadget_driver: 3f980000.usb
   interfaces: 1
   rumble: true
 

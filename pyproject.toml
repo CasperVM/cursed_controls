@@ -3,14 +3,20 @@ name = "cursed-controls"
 version = "0.1.0"
 description = "Map any evdev input device to a virtual Xbox 360 wireless receiver over USB OTG"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
-    "black>=25.9.0",
     "evdev>=1.9.2",
     "pyyaml>=6.0.3",
 ]
+
+[project.scripts]
+cursed-controls = "cursed_controls.cli:main"
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cursed_controls*"]

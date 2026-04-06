@@ -6,6 +6,25 @@ from ctypes import byref
 from pathlib import Path
 from typing import Optional
 
+
+def detect_udc() -> str:
+    """Return the first UDC driver name from /sys/class/udc/.
+
+    Works on any hardware after dwc2 is loaded. Raises RuntimeError
+    with a helpful message if no UDC is found.
+    """
+    udc_path = Path("/sys/class/udc")
+    try:
+        entries = sorted(udc_path.iterdir())
+        if entries:
+            return entries[0].name
+    except Exception:
+        pass
+    raise RuntimeError(
+        "No UDC found in /sys/class/udc/ — is dwc2 loaded? "
+        "Run init-raspbian.sh first, or check that dtoverlay=dwc2 is in config.txt and reboot."
+    )
+
 from cursed_controls.xbox import XboxControllerState
 
 
@@ -88,13 +107,13 @@ class RawGadgetSink(OutputSink):
         self,
         library_path: str,
         num_slots: int = 1,
-        driver: str = "3f980000.usb",
+        driver: str | None = None,
         device: str | None = None,
     ):
         self._library_path = library_path
         self._num_slots = num_slots
-        self._driver = driver.encode()
-        self._device = (device or driver).encode()
+        self._driver = driver   # resolved in open() so detect_udc() runs at the right time
+        self._device = device
         self._lib = None
         self._handle: Optional[int] = None
 
@@ -130,7 +149,11 @@ class RawGadgetSink(OutputSink):
         lib.x360_set_debug.restype = None
         self._lib = lib
 
-        handle = lib.x360_open(self._num_slots, self._driver, self._device)
+        resolved_driver = self._driver or detect_udc()
+        # device_name in usb_raw_init is the UDC instance name, same as driver_name.
+        # It is NOT the /dev/raw-gadget path (that is opened internally by the library).
+        resolved_device = self._device or resolved_driver
+        handle = lib.x360_open(self._num_slots, resolved_driver.encode(), resolved_device.encode())
         if not handle:
             raise RuntimeError(
                 "x360_open failed (check UDC driver name and root permissions)"

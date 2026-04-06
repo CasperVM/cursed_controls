@@ -1,10 +1,12 @@
 """Tests for SmartDefaults and helper logic — no hardware required."""
 
 import pytest
+import yaml
 from evdev import ecodes
 
 from cursed_controls.mapper_tui import (
     CandidateEvent,
+    MapperTUI,
     SmartDefaults,
     _code_name,
     _describe_candidate,
@@ -178,3 +180,105 @@ def test_describe_candidate_axis():
     c = axis(ecodes.ABS_X, 60)
     desc = _describe_candidate(c)
     assert "EV_ABS" in desc
+
+
+# ---------------------------------------------------------------------------
+# calibration — SmartDefaults.infer with calibrated_range
+# ---------------------------------------------------------------------------
+
+
+def test_smart_defaults_uses_calibrated_range_joystick():
+    c = axis(ecodes.ABS_X, 90, min_val=-120, max_val=120, flat=4)
+    m = SmartDefaults.infer(c, Surface.LEFT_JOYSTICK_X, calibrated_range=(-100, 98))
+    assert m["source_min"] == -100
+    assert m["source_max"] == 98
+    # deadzone still from absinfo.flat, not calibrated range
+    assert m["deadzone"] == pytest.approx(4 / 240, abs=0.001)
+
+
+def test_smart_defaults_uses_calibrated_range_trigger():
+    c = axis(ecodes.ABS_BRAKE, 800, min_val=0, max_val=1023, flat=10)
+    m = SmartDefaults.infer(c, Surface.LEFT_TRIGGER, calibrated_range=(5, 990))
+    assert m["source_min"] == 5
+    assert m["source_max"] == 990
+    assert m["target_min"] == 0
+    assert m["target_max"] == 255
+
+
+def test_smart_defaults_falls_back_to_absinfo_when_no_calibration():
+    c = axis(ecodes.ABS_X, 90, min_val=-120, max_val=120)
+    m = SmartDefaults.infer(c, Surface.LEFT_JOYSTICK_X)
+    assert m["source_min"] == -120
+    assert m["source_max"] == 120
+
+
+# ---------------------------------------------------------------------------
+# MapperTUI — load existing config + merge
+# ---------------------------------------------------------------------------
+
+
+def test_mapper_tui_starts_fresh_when_no_file(tmp_path):
+    tui = MapperTUI(str(tmp_path / "new.yaml"))
+    assert tui._existing_devices == {}
+    assert tui._existing_runtime == {"output_mode": "stdout"}
+
+
+def test_mapper_tui_loads_existing_runtime(tmp_path):
+    existing = tmp_path / "mapping.yaml"
+    existing.write_text(yaml.dump({
+        "runtime": {"output_mode": "gadget", "rumble": True, "interfaces": 1},
+        "devices": [],
+    }))
+    tui = MapperTUI(str(existing))
+    assert tui._existing_runtime["output_mode"] == "gadget"
+    assert tui._existing_runtime["rumble"] is True
+
+
+def test_mapper_tui_merge_preserves_existing_profiles(tmp_path):
+    existing = tmp_path / "mapping.yaml"
+    existing.write_text(yaml.dump({
+        "runtime": {"output_mode": "gadget", "rumble": True},
+        "devices": [
+            {"id": "wiimote", "match": {"name": "Nintendo Wii Remote"}, "mappings": []},
+        ],
+    }))
+    tui = MapperTUI(str(existing))
+    tui.profiles = [{"id": "nunchuk", "match": {"name": "Nunchuk"}, "mappings": []}]
+    tui._save()
+
+    result = yaml.safe_load(existing.read_text())
+    ids = [d["id"] for d in result["devices"]]
+    assert "wiimote" in ids
+    assert "nunchuk" in ids
+    assert result["runtime"]["output_mode"] == "gadget"
+    assert result["runtime"]["rumble"] is True
+
+
+def test_mapper_tui_merge_replaces_existing_profile(tmp_path):
+    existing = tmp_path / "mapping.yaml"
+    existing.write_text(yaml.dump({
+        "runtime": {"output_mode": "gadget"},
+        "devices": [
+            {"id": "wiimote", "match": {"name": "Old Name"}, "mappings": [{"a": 1}]},
+        ],
+    }))
+    tui = MapperTUI(str(existing))
+    tui.profiles = [{"id": "wiimote", "match": {"name": "New Name"}, "mappings": [{"a": 2}]}]
+    tui._save()
+
+    result = yaml.safe_load(existing.read_text())
+    devices = {d["id"]: d for d in result["devices"]}
+    assert len(devices) == 1
+    assert devices["wiimote"]["match"]["name"] == "New Name"
+    assert devices["wiimote"]["mappings"] == [{"a": 2}]
+
+
+def test_mapper_tui_save_fresh_config(tmp_path):
+    path = tmp_path / "new.yaml"
+    tui = MapperTUI(str(path))
+    tui.profiles = [{"id": "pad", "match": {"name": "Gamepad"}, "mappings": []}]
+    tui._save()
+
+    result = yaml.safe_load(path.read_text())
+    assert result["devices"][0]["id"] == "pad"
+    assert result["runtime"]["output_mode"] == "stdout"

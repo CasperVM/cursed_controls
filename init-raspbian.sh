@@ -1,4 +1,3 @@
 sudo modprobe uinput
 sudo modprobe hid-wiimote
-cd ~/raw-gadget/raw_gadget/
-sudo ./insmod.sh
+(cd /home/casper/raw-gadget/raw_gadget && sudo bash ./insmod.sh)
