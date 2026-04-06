@@ -1,7 +1,7 @@
 [project]
-name = "python"
+name = "cursed-controls"
 version = "0.1.0"
-description = "Add your description here"
+description = "Map any evdev input device to a virtual Xbox 360 wireless receiver over USB OTG"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
