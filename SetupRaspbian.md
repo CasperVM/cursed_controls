@@ -83,7 +83,7 @@ source ~/.cargo/env
 Build the shared library:
 
 ```bash
-cd ~/cursed_controls/python/360-w-raw-gadget
+cd ~/cursed_controls/360-w-raw-gadget
 cargo build --release
 # produces: target/release/libx360_w_raw_gadget.so
 ```
@@ -91,7 +91,7 @@ cargo build --release
 ## Python setup
 
 ```bash
-cd ~/cursed_controls/python
+cd ~/cursed_controls
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
@@ -130,7 +130,7 @@ bluetoothctl
 Run cursed_controls (needs root for raw-gadget):
 
 ```bash
-cd ~/cursed_controls/python
+cd ~/cursed_controls
 source .venv/bin/activate
 sudo .venv/bin/cursed-controls run example_wiimote.yaml
 ```
