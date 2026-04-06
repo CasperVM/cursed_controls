@@ -101,6 +101,28 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
     return None
 
 
+def auto_connect_wiimote(timeout_s: float = 60.0) -> None:
+    """Scan for and connect a Wiimote if not already present in evdev.
+
+    Used by interactive tools (map, show_axis_range) before showing a device menu.
+    Safe to call when already connected — returns immediately.
+    """
+    if any("Nintendo Wii Remote" in d.name for d in list_devices()):
+        print("Wiimote already connected.")
+        return
+    print(f"Scanning for Wiimote (press 1+2 or Sync)...")
+    mac = scan_for_wiimote(timeout_s)
+    if mac:
+        print(f"Connecting {mac}...")
+        connect_wiimote(mac, timeout=10.0)
+        if wait_for_evdev("Nintendo Wii Remote", timeout=10.0):
+            print("Wiimote ready.")
+        else:
+            print("Connected but evdev node not found yet, continuing.")
+    else:
+        print("No Wiimote found, continuing without.")
+
+
 def wait_for_evdev(name: str, timeout: float) -> bool:
     """Poll list_devices() until a device with the given name appears.
 

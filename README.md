@@ -1,6 +1,8 @@
 # cursed_controls
 
-Map any evdev input device to a virtual Xbox 360 wireless receiver over USB OTG. Turns a Raspberry Pi into a controller adapter. e.g. Wii Remote + Nunchuk or any generic gamepad → Xbox 360.
+Got a weird Bluetooth controller that nothing supports natively? Xbox 360 controllers work on nearly everything. So make it one.
+
+cursed_controls runs on a Raspberry Pi Zero between your controllers and the host, emulating a real Xbox 360 wireless receiver over USB OTG. Combine multiple physical devices into a single virtual Xbox pad (think Wii Remote + Nunchuk), with up to 4 controller slots. Works on Windows and Linux; macOS is limited to 1 slot.
 
 Tested on Raspberry Pi Zero 2W.
 
@@ -45,8 +47,10 @@ cursed-controls simulate mapping.yaml
 # Interactive TUI to build a new mapping file (WIP — see note below)
 cursed-controls map mapping.yaml
 
-# Show live per-axis min/max for a device (useful for calibrating source_min/max)
-python scripts/show_axis_range.py /dev/input/eventN
+# Live axis debug TUI: shows per-axis current value, min/max, and bar chart
+# Run without arguments to get a device selection menu
+python scripts/show_axis_range.py
+python scripts/show_axis_range.py /dev/input/eventN   # skip menu
 ```
 
 > **Note on `map`:** The interactive mapper is a work in progress. It can be
@@ -144,6 +148,8 @@ When `rumble: true`, the runtime polls the gadget for rumble commands from the h
 
 ```bash
 pytest
+# or with uv:
+uv run pytest
 ```
 
 All tests run without hardware (FakeSink, mock devices).

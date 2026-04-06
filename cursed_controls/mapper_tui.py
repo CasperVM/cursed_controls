@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import select
+import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -28,6 +29,18 @@ _DPAD_SURFACES = {
     Surface.DPAD_LEFT,
     Surface.DPAD_RIGHT,
 }
+
+# Ordered list for the numbered surface picker menu
+_SURFACE_MENU_ORDER: list[Surface] = [
+    Surface.A, Surface.B, Surface.X, Surface.Y,
+    Surface.BUMPER_L, Surface.BUMPER_R,
+    Surface.STICK_L, Surface.STICK_R,
+    Surface.START, Surface.OPTIONS, Surface.XBOX,
+    Surface.DPAD_UP, Surface.DPAD_DOWN, Surface.DPAD_LEFT, Surface.DPAD_RIGHT,
+    Surface.LEFT_JOYSTICK_X, Surface.LEFT_JOYSTICK_Y,
+    Surface.RIGHT_JOYSTICK_X, Surface.RIGHT_JOYSTICK_Y,
+    Surface.LEFT_TRIGGER, Surface.RIGHT_TRIGGER,
+]
 
 
 def _code_name(ev_type: int, code: int) -> str:
@@ -63,6 +76,7 @@ class InputDetector:
     def __init__(self, device: evdev.InputDevice) -> None:
         self._device = device
         self.noisy_axes: set[int] = set()
+        self.axis_drift: dict[int, float] = {}
         self._grabbed = False
 
     def _try_grab(self) -> None:
@@ -70,7 +84,7 @@ class InputDetector:
             self._device.grab()
             self._grabbed = True
         except IOError:
-            self._grabbed = False  # another process holds it; proceed without
+            self._grabbed = False
 
     def _ungrab(self) -> None:
         if self._grabbed:
@@ -83,12 +97,10 @@ class InputDetector:
     def calibrate_axis(self, code: int, duration_s: float = 4.0) -> tuple[int, int]:
         """Watch axis `code` and return the (min, max) values actually observed.
 
-        Falls back to absinfo declared range if no events arrive or the device
-        doesn't move far enough to exceed the inverted sentinels.
+        Falls back to absinfo declared range if no events arrive.
         """
         try:
             info = self._device.absinfo(code)
-            # Start inverted so any real reading beats the sentinels
             obs_min, obs_max = info.max, info.min
         except Exception:
             obs_min, obs_max = 0, 0
@@ -149,7 +161,7 @@ class InputDetector:
             pass
 
         self.noisy_axes = set()
-        self.axis_drift: dict[int, float] = {}  # observed spread during baseline
+        self.axis_drift = {}
         baseline: dict[int, float] = {}
 
         for code, vals in samples.items():
@@ -166,6 +178,63 @@ class InputDetector:
                 pass
 
         return baseline
+
+    def detect_and_calibrate(
+        self, baseline: dict[int, float], duration_s: float = 6.0
+    ) -> tuple[CandidateEvent | None, tuple[int, int] | None]:
+        """
+        Combined detection + range calibration in one gesture.
+
+        User presses a button or moves an axis. Returns:
+          - (candidate, None)           for buttons (instant return)
+          - (candidate, (lo, hi))       for axes (range recorded during window)
+          - (None, None)                if nothing detected
+        """
+        obs_range: dict[int, tuple[int, int]] = {}
+        best: CandidateEvent | None = None
+        early: CandidateEvent | None = None
+        deadline = time.monotonic() + duration_s
+
+        self._try_grab()
+        try:
+            while time.monotonic() < deadline and early is None:
+                remaining = deadline - time.monotonic()
+                sys.stdout.write(f"\r  Listening... {remaining:.0f}s  ")
+                sys.stdout.flush()
+                r, _, _ = select.select([self._device.fd], [], [], min(remaining, 0.1))
+                if not r:
+                    continue
+                try:
+                    for event in self._device.read():
+                        if event.type == ecodes.EV_ABS:
+                            lo, hi = obs_range.get(event.code, (event.value, event.value))
+                            obs_range[event.code] = (min(lo, event.value), max(hi, event.value))
+                        candidate = self._score(event, baseline)
+                        if candidate is None:
+                            continue
+                        if candidate.confidence >= 1.0:
+                            early = candidate
+                            break
+                        if best is None or candidate.confidence > best.confidence:
+                            best = candidate
+                except BlockingIOError:
+                    pass
+        except OSError:
+            print("\n  [device disconnected]")
+        finally:
+            self._ungrab()
+            sys.stdout.write("\r\033[K")
+            sys.stdout.flush()
+
+        if early is not None:
+            return early, None
+
+        calibrated = None
+        if best is not None and best.ev_type == ecodes.EV_ABS and best.ev_code in obs_range:
+            lo, hi = obs_range[best.ev_code]
+            if hi > lo:
+                calibrated = (lo, hi)
+        return best, calibrated
 
     def listen(
         self, baseline: dict[int, float], duration_s: float = 3.0
@@ -221,7 +290,6 @@ class InputDetector:
                 return None
             midpoint = baseline.get(event.code, (abs_info.min + abs_info.max) / 2)
             delta = abs(event.value - midpoint)
-            # For noisy axes, require movement well beyond the observed baseline drift
             if event.code in self.noisy_axes:
                 drift = self.axis_drift.get(event.code, span * 0.05)
                 threshold = max(drift * 2, span * 0.25)
@@ -304,7 +372,6 @@ class SmartDefaults:
             threshold = abs_info.max // 2 if abs_info.min >= 0 else 1
             return {**base, "kind": "button", "threshold": threshold}
 
-        # fallback: generic axis→axis
         return {
             **base,
             "kind": "axis",
@@ -321,29 +388,42 @@ class SmartDefaults:
 # ---------------------------------------------------------------------------
 
 
-def _print_surface_menu(already_mapped: set[Surface]) -> None:
-    buttons = [s for s in Surface if s.is_button]
-    axes = [s for s in Surface if s.is_axis]
-    print(
-        "  Buttons:",
-        "  ".join(f"[*]{s.value}" if s in already_mapped else s.value for s in buttons),
-    )
-    print(
-        "  Axes:   ",
-        "  ".join(f"[*]{s.value}" if s in already_mapped else s.value for s in axes),
-    )
-    print("  [*] = already mapped this session")
-
-
 def _pick_surface(already_mapped: set[Surface]) -> Surface | None:
-    _print_surface_menu(already_mapped)
+    """Numbered surface picker menu grouped by buttons / axes."""
+    buttons = [s for s in _SURFACE_MENU_ORDER if s.is_button]
+    axes    = [s for s in _SURFACE_MENU_ORDER if s.is_axis]
+
+    def _fmt(s: Surface, idx: int) -> str:
+        marker = "[*]" if s in already_mapped else "   "
+        return f"{marker}[{idx:2d}] {s.value}"
+
+    print("  Map to Xbox surface:")
+    print("    Buttons:")
+    btn_cols = 4
+    for row_start in range(0, len(buttons), btn_cols):
+        row = buttons[row_start:row_start + btn_cols]
+        print("      " + "  ".join(_fmt(s, _SURFACE_MENU_ORDER.index(s)) for s in row))
+    print("    Axes:")
+    for s in axes:
+        print(f"      {_fmt(s, _SURFACE_MENU_ORDER.index(s))}")
+    print("    [*] = already mapped this session")
+
     while True:
-        raw = input("  Surface (name or prefix, Enter to skip): ").strip().upper()
+        raw = input("  Surface number (or name prefix, Enter to skip): ").strip()
         if not raw:
             return None
-        if raw in Surface.__members__:
-            return Surface[raw]
-        matches = [s for s in Surface if s.value.upper().startswith(raw)]
+        # numeric
+        if raw.isdigit():
+            idx = int(raw)
+            if 0 <= idx < len(_SURFACE_MENU_ORDER):
+                return _SURFACE_MENU_ORDER[idx]
+            print(f"  Out of range: {idx}")
+            continue
+        # name prefix fallback
+        upper = raw.upper()
+        if upper in Surface.__members__:
+            return Surface[upper]
+        matches = [s for s in Surface if s.value.upper().startswith(upper)]
         if len(matches) == 1:
             return matches[0]
         if matches:
@@ -352,9 +432,32 @@ def _pick_surface(already_mapped: set[Surface]) -> Surface | None:
             print(f"  Unknown: {raw!r}")
 
 
+def _print_status_table(profile_id: str, mappings: list[dict]) -> None:
+    if not mappings:
+        print(f"  (no mappings yet for [{profile_id}])")
+        return
+    print(f"  Mapped so far [{profile_id}]:")
+    for m in mappings:
+        tgt      = m["target"]
+        src_type = _type_name(m["source_type"])
+        src_code = _code_name(m["source_type"], m["source_code"])
+        kind     = m["kind"]
+        extras: list[str] = []
+        if "source_min" in m:
+            extras.append(f"src:{m['source_min']}..{m['source_max']}")
+        if "deadzone" in m and m["deadzone"]:
+            extras.append(f"dz={m['deadzone']:.2f}")
+        if "on_value" in m:
+            extras.append(f"on={m['on_value']} off={m.get('off_value', 0)}")
+        if m.get("invert"):
+            extras.append("↕inv")
+        extra_str = "  " + "  ".join(extras) if extras else ""
+        print(f"    {tgt:<22} {src_type} {src_code:<16} [{kind}]{extra_str}")
+
+
 def _describe_candidate(c: CandidateEvent) -> str:
     name = _code_name(c.ev_type, c.ev_code)
-    typ = _type_name(c.ev_type)
+    typ  = _type_name(c.ev_type)
     if c.ev_type == ecodes.EV_KEY:
         return f"{typ} {c.ev_code} ({name})  [button]"
     abs_info = c.abs_info
@@ -394,7 +497,7 @@ class MapperTUI:
                 print(f"Warning: could not load existing config ({e}), starting fresh.")
 
     def run(self) -> None:
-        print("cursed-controls map, interactive config builder")
+        print("cursed-controls map — interactive config builder")
         print(f"Output: {self.output_path}")
         print()
         try:
@@ -408,7 +511,58 @@ class MapperTUI:
             else:
                 print("Nothing to save.")
 
+    def _pre_connect(self) -> None:
+        """Connect devices from the existing config, or scan for a Wiimote if no config."""
+        from cursed_controls.bluetooth import (
+            auto_connect_wiimote,
+            connect_device,
+            connect_wiimote,
+            scan_for_wiimote,
+            wait_for_evdev,
+        )
+
+        if not self._existing_devices:
+            auto_connect_wiimote()
+            return
+
+        handled = False
+        for device in self._existing_devices.values():
+            conn      = device.get("connection", {})
+            conn_type = conn.get("type", "evdev")
+            name      = device.get("match", {}).get("name")
+
+            if conn_type == "wiimote":
+                handled = True
+                if name and any(d.name == name for d in list_devices()):
+                    print(f"  [{device['id']}] already connected")
+                    continue
+                print(f"  [{device['id']}] Scanning for Wiimote (press 1+2 or Sync)...")
+                mac = scan_for_wiimote(conn.get("timeout_s", 60))
+                if mac:
+                    connect_wiimote(mac, timeout=10.0)
+                    if name:
+                        wait_for_evdev(name, timeout=10.0)
+                else:
+                    print(f"  [{device['id']}] not found, continuing")
+
+            elif conn_type == "bluetooth":
+                handled = True
+                if name and any(d.name == name for d in list_devices()):
+                    print(f"  [{device['id']}] already connected")
+                    continue
+                mac = conn.get("mac")
+                if mac:
+                    print(f"  [{device['id']}] Connecting {mac}...")
+                    connect_device(mac, conn.get("timeout_s", 30))
+                    if name:
+                        wait_for_evdev(name, timeout=10.0)
+
+        if not handled:
+            auto_connect_wiimote()
+
     def _session(self) -> None:
+        self._pre_connect()
+        print()
         devices = self._step_select_devices()
         if not devices:
             print("No devices selected. Exiting.")
@@ -416,7 +570,7 @@ class MapperTUI:
 
         for info, ev_dev in devices:
             profile_id = self._ask_profile_id(info)
-            mappings = self._step_map_device(info, ev_dev)
+            mappings   = self._step_map_device(info, ev_dev, profile_id)
             if mappings:
                 match_key = "uniq" if info.uniq else "name" if info.name else "phys"
                 match_val = info.uniq or info.name or info.phys
@@ -461,7 +615,7 @@ class MapperTUI:
                 except PermissionError:
                     print(
                         f"  Cannot open {info.path}: permission denied. "
-                        "Add your user to the 'input' group."
+                        "Run with sudo or add your user to the 'input' group."
                     )
                 except Exception as e:
                     print(f"  Cannot open {info.path}: {e}")
@@ -471,12 +625,16 @@ class MapperTUI:
         return selected
 
     def _ask_profile_id(self, info: DiscoveredDevice) -> str:
-        default = (info.identifier or info.name or "device").replace(" ", "-")[:20]
-        raw = input(f"Profile ID [{default}]: ").strip()
+        default = info.name.replace(" ", "-") if info.name else "device"
+        print()
+        print(f'  Profile ID: a short name for this device in the config file.')
+        print(f'  It appears in logs and is used to match/update existing profiles.')
+        print(f'  Examples: "wiimote", "nunchuk", "my-gamepad"')
+        raw = input(f"  Profile ID [{default}]: ").strip()
         return raw or default
 
     def _step_map_device(
-        self, info: DiscoveredDevice, ev_dev: evdev.InputDevice
+        self, info: DiscoveredDevice, ev_dev: evdev.InputDevice, profile_id: str
     ) -> list[dict]:
         detector = InputDetector(ev_dev)
         mappings: list[dict] = []
@@ -484,34 +642,56 @@ class MapperTUI:
 
         print()
         print(f"Mapping: {info.name}  [{info.path}]")
-        print("Type 'done' to finish, press Enter to skip a cycle.")
+        print()
+        print("  Press a button or move an axis on the controller to detect it,")
+        print("  then choose which Xbox button/axis it maps to.")
         print()
 
         while True:
-            prompt = input("Press/move input to map (or 'done'): ").strip().lower()
-            if prompt == "done":
+            print("  ─────────────────────────────────────────────────")
+            prompt = input("  [Enter] detect next   [d] done   [u] undo last\n  > ").strip().lower()
+
+            if prompt == "d":
                 break
 
+            if prompt == "u":
+                if mappings:
+                    removed = mappings.pop()
+                    tgt = removed.get("target", "?")
+                    try:
+                        self._already_mapped.discard(Surface(tgt))
+                    except ValueError:
+                        pass
+                    print(f"  Undone: {tgt}")
+                else:
+                    print("  Nothing to undo.")
+                print()
+                _print_status_table(profile_id, mappings)
+                print()
+                continue
+
+            # detect
             print("  Sampling baseline...", end="", flush=True)
             baseline = detector.sample_baseline(0.3)
-            noisy = [_code_name(ecodes.EV_ABS, c) for c in detector.noisy_axes]
-            if noisy:
-                print(f" (high-threshold axes: {', '.join(noisy)})", end="")
-            print()
+            if detector.noisy_axes:
+                noisy_names = [_code_name(ecodes.EV_ABS, c) for c in detector.noisy_axes]
+                print(f"\n  ⚠  Drifty axes detected ({', '.join(noisy_names)})"
+                      " — push firmly and hold to the extreme")
+            else:
+                print()
 
-            print("  Listening... (3s)", end="", flush=True)
-            candidate = detector.listen(baseline, 3.0)
-            print()
+            candidate, calibrated_range = detector.detect_and_calibrate(baseline, duration_s=6.0)
 
             if candidate is None:
                 print("  No input detected.")
                 again = input("  Try again? (Y/n): ").strip().lower()
                 if again != "n":
                     continue
-                else:
-                    break
+                break
 
             print(f"  Detected: {_describe_candidate(candidate)}")
+            if calibrated_range:
+                print(f"  Calibrated range: {calibrated_range[0]}..{calibrated_range[1]}")
 
             src_key = (candidate.ev_type, candidate.ev_code)
             if src_key in mapped_sources:
@@ -520,23 +700,12 @@ class MapperTUI:
                     "is already mapped in this profile."
                 )
 
+            print()
             surface = _pick_surface(self._already_mapped)
             if surface is None:
                 print("  Skipped.")
+                print()
                 continue
-
-            calibrated_range = None
-            if (
-                candidate.ev_type == ecodes.EV_ABS
-                and candidate.abs_info is not None
-                and (candidate.abs_info.max - candidate.abs_info.min) > 3
-                and surface in (_JOYSTICK_SURFACES | _TRIGGER_SURFACES)
-            ):
-                print("  Wiggle the axis to its extremes, then press Enter...")
-                input()
-                print("  Calibrating...", end="", flush=True)
-                calibrated_range = detector.calibrate_axis(candidate.ev_code, duration_s=0.3)
-                print(f" observed range: {calibrated_range[0]}..{calibrated_range[1]}")
 
             mapping = SmartDefaults.infer(candidate, surface, calibrated_range)
 
@@ -544,10 +713,10 @@ class MapperTUI:
             if (
                 candidate.ev_type == ecodes.EV_ABS
                 and candidate.abs_info is not None
-                and candidate.value
-                < (candidate.abs_info.min + candidate.abs_info.max) / 2
+                and candidate.value < (candidate.abs_info.min + candidate.abs_info.max) / 2
+                and surface in _JOYSTICK_SURFACES
             ):
-                ans = input("  Axis moved negative, invert? (y/N): ").strip().lower()
+                ans = input("  Axis moved in the negative direction — invert? (y/N): ").strip().lower()
                 if ans == "y":
                     mapping["invert"] = True
 
@@ -556,29 +725,31 @@ class MapperTUI:
             mapped_sources.add(src_key)
             self._already_mapped.add(surface)
 
+            print()
+            _print_status_table(profile_id, mappings)
+            print()
+
         return mappings
 
     def _step_review(self) -> None:
         print()
         print("─" * 60)
-        all_mappings: list[
-            tuple[int, int, dict]
-        ] = []  # (profile_idx, mapping_idx, dict)
+        all_mappings: list[tuple[int, int, dict]] = []
         for pi, profile in enumerate(self.profiles):
             print(f"Profile [{profile['id']}]  match: {profile['match']}")
             for mi, m in enumerate(profile.get("mappings", [])):
-                label = f"  [{len(all_mappings)}] "
-                src = f"{_type_name(m['source_type'])} {_code_name(m['source_type'], m['source_code'])}"
-                tgt = m["target"]
-                kind = m["kind"]
-                extra = ""
+                label    = f"  [{len(all_mappings)}] "
+                src      = f"{_type_name(m['source_type'])} {_code_name(m['source_type'], m['source_code'])}"
+                tgt      = m["target"]
+                kind     = m["kind"]
+                extra    = ""
                 if "source_min" in m:
                     extra = f"  src:{m['source_min']}..{m['source_max']}"
                 print(f"{label}{src:<28} → {tgt:<22} [{kind}]{extra}")
                 all_mappings.append((pi, mi, m))
         print()
 
-        raw = input("Remove a mapping by number (or Enter to skip): ").strip()
+        raw = input("Remove a mapping by number (or Enter to save): ").strip()
         if raw.isdigit():
             idx = int(raw)
             if 0 <= idx < len(all_mappings):
@@ -587,7 +758,6 @@ class MapperTUI:
                 print(f"  Removed mapping [{idx}]")
 
     def _save(self) -> None:
-        # Overlay this session's profiles onto existing ones (keyed by id)
         merged = dict(self._existing_devices)
         for profile in self.profiles:
             merged[profile["id"]] = profile
