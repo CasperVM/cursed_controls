@@ -38,7 +38,6 @@ if wiimote:
     steer_direction = "s"
     sys.stdout.write("X: {}, Y: {}, Z: {}            \r".format(x, y, z))
     for event in wiimote.read_loop():
-
         if event.type != evdev.ecodes.EV_ABS:
             print(event)
         if event.type == evdev.ecodes.EV_ABS:

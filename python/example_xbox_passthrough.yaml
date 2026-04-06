@@ -1,0 +1,163 @@
+## Example config: Xbox Wireless Controller passthrough → Xbox 360 gadget
+##
+## Useful for testing the full pipeline without a Wii remote, or for
+## remapping an Xbox controller to a USB gadget (e.g. for legacy console adapters).
+##
+## Event codes sourced from xbone_capabilities.md (real hardware capture).
+## Note: this controller reports joystick axes in 0..65535 (not signed -32767..32767).
+## EV_KEY = 1, EV_ABS = 3
+
+runtime:
+  output_mode: stdout          # change to "gadget" for real USB output
+  gadget_library: 360-w-raw-gadget/target/release/libx360_w_raw_gadget.so
+  gadget_driver: 3f980000.usb
+  interfaces: 1
+  rumble: true
+
+devices:
+  - id: xbox-wireless
+    match:
+      name: "Xbox Wireless Controller"
+    mappings:
+      # Face buttons
+      - source_type: 1
+        source_code: 304  # BTN_A / BTN_SOUTH
+        target: A
+        kind: button
+
+      - source_type: 1
+        source_code: 305  # BTN_B / BTN_EAST
+        target: B
+        kind: button
+
+      - source_type: 1
+        source_code: 307  # BTN_X / BTN_NORTH
+        target: X
+        kind: button
+
+      - source_type: 1
+        source_code: 308  # BTN_Y / BTN_WEST
+        target: Y
+        kind: button
+
+      # Shoulder buttons
+      - source_type: 1
+        source_code: 310  # BTN_TL
+        target: BUMPER_L
+        kind: button
+
+      - source_type: 1
+        source_code: 311  # BTN_TR
+        target: BUMPER_R
+        kind: button
+
+      # Menu buttons
+      - source_type: 1
+        source_code: 315  # BTN_START
+        target: START
+        kind: button
+
+      - source_type: 1
+        source_code: 314  # BTN_SELECT
+        target: OPTIONS
+        kind: button
+
+      - source_type: 1
+        source_code: 316  # BTN_MODE
+        target: XBOX
+        kind: button
+
+      # Stick clicks
+      - source_type: 1
+        source_code: 317  # BTN_THUMBL
+        target: STICK_L
+        kind: button
+
+      - source_type: 1
+        source_code: 318  # BTN_THUMBR
+        target: STICK_R
+        kind: button
+
+      # D-Pad (reported as hat axes, range -1..1)
+      - source_type: 3
+        source_code: 16   # ABS_HAT0X
+        target: DPAD_LEFT
+        kind: hat
+
+      - source_type: 3
+        source_code: 16   # ABS_HAT0X
+        target: DPAD_RIGHT
+        kind: hat
+
+      - source_type: 3
+        source_code: 17   # ABS_HAT0Y
+        target: DPAD_UP
+        kind: hat
+
+      - source_type: 3
+        source_code: 17   # ABS_HAT0Y
+        target: DPAD_DOWN
+        kind: hat
+
+      # Left joystick (ABS_X/Y, range 0..65535, center ~32767)
+      - source_type: 3
+        source_code: 0    # ABS_X
+        target: LEFT_JOYSTICK_X
+        kind: axis
+        source_min: 0
+        source_max: 65535
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.06    # matches flat=4095/65535
+
+      - source_type: 3
+        source_code: 1    # ABS_Y
+        target: LEFT_JOYSTICK_Y
+        kind: axis
+        source_min: 0
+        source_max: 65535
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.06
+        invert: true      # Y axis convention
+
+      # Right joystick (ABS_Z/RZ on this controller, range 0..65535)
+      - source_type: 3
+        source_code: 2    # ABS_Z
+        target: RIGHT_JOYSTICK_X
+        kind: axis
+        source_min: 0
+        source_max: 65535
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.06
+
+      - source_type: 3
+        source_code: 5    # ABS_RZ
+        target: RIGHT_JOYSTICK_Y
+        kind: axis
+        source_min: 0
+        source_max: 65535
+        target_min: -32767
+        target_max: 32767
+        deadzone: 0.06
+        invert: true
+
+      # Triggers (ABS_GAS/BRAKE, range 0..1023)
+      - source_type: 3
+        source_code: 10   # ABS_BRAKE  (left trigger)
+        target: LEFT_TRIGGER
+        kind: axis
+        source_min: 0
+        source_max: 1023
+        target_min: 0
+        target_max: 255
+
+      - source_type: 3
+        source_code: 9    # ABS_GAS  (right trigger)
+        target: RIGHT_TRIGGER
+        kind: axis
+        source_min: 0
+        source_max: 1023
+        target_min: 0
+        target_max: 255

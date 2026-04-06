@@ -214,11 +214,6 @@ class ButtonToJoystickAxis(Enum):
     MIN_TO_MAX = "MIN_TO_MAX"  # No button press = MIN
     MAX_TO_MIN = "MAX_TO_MIN"  # No button press = MAX
 
-    def __init__(self, value):
-        if not value:
-            super().__init__("MAX_OUT")
-        super().__init__()
-
 
 @dataclass
 class InputMapping:
@@ -240,20 +235,19 @@ class InputMapping:
             "cap_code": self.cap_code,
             "x360_out": self.x360_out.value[0],
             "button_to_joystick": self.button_to_joystick.value,
-            "input_axis_absinfo": None # FIXME...
+            "input_axis_absinfo": None,  # FIXME...
         }
 
     @classmethod
-    def from_dict(cls, d: dict):
-        cls.__init__(
-            **{
-                **d,
-                "x360_out": X360Surfaces(d["x360_out"]),
-                "button_to_joystick": ButtonToJoystickAxis(
-                    d.get("button_to_joystick", None)
-                ),
-                "input_axis_absinfo": None
-            }
+    def from_dict(cls, d: dict) -> "InputMapping":
+        bj = d.get("button_to_joystick")
+        return cls(
+            device_identifier=d["device_identifier"],
+            cap_type=d["cap_type"],
+            cap_code=d["cap_code"],
+            x360_out=X360Surfaces[d["x360_out"]],
+            button_to_joystick=ButtonToJoystickAxis(bj) if bj is not None else None,
+            input_axis_absinfo=None,
         )
 
 
@@ -340,7 +334,7 @@ class DeviceMenu:
             print("AXES:")
             for jdx, i in enumerate(abs_menu_list):
                 capability_name, capability_code, event_type_code = i
-                print(f" ({jdx+len(button_menu_list)}). {capability_name}")
+                print(f" ({jdx + len(button_menu_list)}). {capability_name}")
             print()
             # try:
             inp_opt = input("Choose option: ")
