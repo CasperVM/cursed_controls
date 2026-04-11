@@ -225,10 +225,14 @@ def test_mapper_tui_starts_fresh_when_no_file(tmp_path):
 
 def test_mapper_tui_loads_existing_runtime(tmp_path):
     existing = tmp_path / "mapping.yaml"
-    existing.write_text(yaml.dump({
-        "runtime": {"output_mode": "gadget", "rumble": True, "interfaces": 1},
-        "devices": [],
-    }))
+    existing.write_text(
+        yaml.dump(
+            {
+                "runtime": {"output_mode": "gadget", "rumble": True, "interfaces": 1},
+                "devices": [],
+            }
+        )
+    )
     tui = MapperTUI(str(existing))
     assert tui._existing_runtime["output_mode"] == "gadget"
     assert tui._existing_runtime["rumble"] is True
@@ -236,12 +240,20 @@ def test_mapper_tui_loads_existing_runtime(tmp_path):
 
 def test_mapper_tui_merge_preserves_existing_profiles(tmp_path):
     existing = tmp_path / "mapping.yaml"
-    existing.write_text(yaml.dump({
-        "runtime": {"output_mode": "gadget", "rumble": True},
-        "devices": [
-            {"id": "wiimote", "match": {"name": "Nintendo Wii Remote"}, "mappings": []},
-        ],
-    }))
+    existing.write_text(
+        yaml.dump(
+            {
+                "runtime": {"output_mode": "gadget", "rumble": True},
+                "devices": [
+                    {
+                        "id": "wiimote",
+                        "match": {"name": "Nintendo Wii Remote"},
+                        "mappings": [],
+                    },
+                ],
+            }
+        )
+    )
     tui = MapperTUI(str(existing))
     tui.profiles = [{"id": "nunchuk", "match": {"name": "Nunchuk"}, "mappings": []}]
     tui._save()
@@ -256,14 +268,24 @@ def test_mapper_tui_merge_preserves_existing_profiles(tmp_path):
 
 def test_mapper_tui_merge_replaces_existing_profile(tmp_path):
     existing = tmp_path / "mapping.yaml"
-    existing.write_text(yaml.dump({
-        "runtime": {"output_mode": "gadget"},
-        "devices": [
-            {"id": "wiimote", "match": {"name": "Old Name"}, "mappings": [{"a": 1}]},
-        ],
-    }))
+    existing.write_text(
+        yaml.dump(
+            {
+                "runtime": {"output_mode": "gadget"},
+                "devices": [
+                    {
+                        "id": "wiimote",
+                        "match": {"name": "Old Name"},
+                        "mappings": [{"a": 1}],
+                    },
+                ],
+            }
+        )
+    )
     tui = MapperTUI(str(existing))
-    tui.profiles = [{"id": "wiimote", "match": {"name": "New Name"}, "mappings": [{"a": 2}]}]
+    tui.profiles = [
+        {"id": "wiimote", "match": {"name": "New Name"}, "mappings": [{"a": 2}]}
+    ]
     tui._save()
 
     result = yaml.safe_load(existing.read_text())

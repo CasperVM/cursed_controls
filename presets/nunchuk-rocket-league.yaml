@@ -1,0 +1,26 @@
+display_name: Wii Nunchuk — Rocket League
+match:
+  name: Nintendo Wii Remote Nunchuk
+mappings:
+  - {source_type: 1, source_code: 309, target: LEFT_TRIGGER, kind: button, label: Z / Brake,     on_value: 255, off_value: 0}
+  - {source_type: 1, source_code: 306, target: Y,            kind: button, label: C / Handbrake}
+  - source_type: 3
+    source_code: 16
+    target: LEFT_JOYSTICK_X
+    kind: axis
+    label: Stick X / Steering
+    source_min: -90
+    source_max: 111
+    target_min: -32767
+    target_max: 32767
+    deadzone: 0.10
+  - source_type: 3
+    source_code: 17
+    target: LEFT_JOYSTICK_Y
+    kind: axis
+    label: Stick Y / Pitch
+    source_min: -104
+    source_max: 95
+    target_min: -32767
+    target_max: 32767
+    deadzone: 0.10

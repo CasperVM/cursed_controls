@@ -34,14 +34,61 @@ def connect_device(mac: str, timeout: float) -> bool:
 
 
 def connect_wiimote(mac: str, timeout: float) -> bool:
-    """Connect a Wii Remote by MAC.
+    """Connect a Wii Remote using legacy one-shot HID.
 
-    Wiimotes use a non-standard HID pairing — skip 'pair', just trust+connect.
-    The hid-wiimote kernel driver handles the PIN automatically.
+    Wiimotes are stateless between power cycles — any stored link key is
+    invalid after power-off. We remove the stored bonding first, then scan
+    until the device appears advertising (user presses 1+2 or Sync), then
+    trust+connect fresh without pairing.
+
     Returns True if connection was successful.
     """
+    import select as _select
+
+    # Remove stale bonding info — old link key causes BlueZ to fail auth
+    _run_bluetoothctl("remove", mac, timeout=5.0)
+    time.sleep(0.3)
+
+    _run_bluetoothctl("pairable", "on", timeout=5.0)
+
+    _strip = re.compile(r"[\x01\x02]|\x1b\[[0-9;]*m")
+    mac_norm = mac.upper().replace(":", "")
+
+    # Scan until the Wiimote appears advertising, then immediately connect
+    print(f"[wiimote] Scanning for {mac} (press 1+2 or Sync)…")
+    found = False
+    try:
+        proc = subprocess.Popen(
+            ["stdbuf", "-oL", "bluetoothctl", "scan", "on"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if proc.stdout is None:
+            return False
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ready, _, _ = _select.select([proc.stdout], [], [], 1.0)
+            if not ready:
+                continue
+            raw = proc.stdout.readline()
+            if not raw:
+                break
+            line = _strip.sub("", raw)
+            if mac_norm in line.upper().replace(":", ""):
+                found = True
+                break
+        proc.terminate()
+        proc.wait()
+    except (OSError, FileNotFoundError):
+        return False
+
+    if not found:
+        return False
+
+    # Device is now in the discovery cache — trust and connect without pairing
     _run_bluetoothctl("trust", mac, timeout=5.0)
-    out = _run_bluetoothctl("connect", mac, timeout=timeout + 2)
+    out = _run_bluetoothctl("connect", mac, timeout=12.0)
     return "Connection successful" in out
 
 
@@ -78,7 +125,8 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
             stderr=subprocess.STDOUT,
             text=True,
         )
-        assert proc.stdout is not None
+        if proc.stdout is None:
+            return None
 
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -96,7 +144,7 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
 
         proc.terminate()
         proc.wait()
-    except Exception:
+    except (OSError, FileNotFoundError):
         pass
     return None
 
@@ -133,4 +181,39 @@ def wait_for_evdev(name: str, timeout: float) -> bool:
         if any(d.name == name for d in list_devices()):
             return True
         time.sleep(0.5)
+    return False
+
+
+def is_device_connected(mac: str) -> bool:
+    """Return True if bluetoothctl reports the device as currently connected."""
+    out = _run_bluetoothctl("info", mac, timeout=5.0)
+    return "Connected: yes" in out
+
+
+def reconnect_bluetooth(
+    mac: str,
+    is_wiimote: bool,
+    timeout: float,
+    max_retries: int = 5,
+    backoff: float = 2.0,
+) -> bool:
+    """Attempt to reconnect a Bluetooth device.
+
+    For Wiimotes: runs a single scan window (remove → scan → trust → connect).
+    The scan window is sized to cover all retry budget so the user only needs
+    to press 1+2 once during the window.
+
+    For standard BT devices: bounded retries with backoff.
+    """
+    if is_wiimote:
+        scan_window = timeout * max_retries + backoff * (max_retries - 1)
+        return connect_wiimote(mac, timeout=scan_window)
+
+    connect_fn = connect_device
+    for attempt in range(max_retries):
+        if attempt > 0:
+            time.sleep(backoff)
+        print(f"Reconnect attempt {attempt + 1}/{max_retries} for {mac}...")
+        if connect_fn(mac, timeout=timeout):
+            return True
     return False

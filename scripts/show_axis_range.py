@@ -5,6 +5,7 @@ Usage:
     python scripts/show_axis_range.py              # shows device selection menu
     python scripts/show_axis_range.py /dev/input/eventN   # skips menu
 """
+
 import sys
 import select
 import termios
@@ -58,7 +59,7 @@ def _pick_device() -> evdev.InputDevice:
                 return devs[idx]
         except (ValueError, EOFError):
             pass
-        print(f"  Enter a number 0–{len(devs)-1}")
+        print(f"  Enter a number 0–{len(devs) - 1}")
 
 
 def _ago(t: float) -> str:
@@ -70,7 +71,9 @@ def _ago(t: float) -> str:
 
 def _label(ev_type: int, code: int) -> str:
     name = ecodes.bytype.get(ev_type, {}).get(code, str(code))
-    tname = {ecodes.EV_KEY: "EV_KEY", ecodes.EV_ABS: "EV_ABS"}.get(ev_type, f"EV_{ev_type}")
+    tname = {ecodes.EV_KEY: "EV_KEY", ecodes.EV_ABS: "EV_ABS"}.get(
+        ev_type, f"EV_{ev_type}"
+    )
     return f"{tname} {name} ({code})"
 
 
@@ -85,8 +88,10 @@ def main() -> None:
         if not _has_game_device():
             try:
                 import sys as _sys
+
                 _sys.path.insert(0, str(Path(__file__).parent.parent))
                 from cursed_controls.bluetooth import auto_connect_wiimote
+
                 auto_connect_wiimote()
                 print()
             except Exception:
@@ -96,8 +101,8 @@ def main() -> None:
     caps = dev.capabilities()
     abs_axes = caps.get(ecodes.EV_ABS, [])
 
-    observed: dict[int, tuple[int, int]] = {}   # code → (min, max)
-    current:  dict[int, int] = {}               # code → current value
+    observed: dict[int, tuple[int, int]] = {}  # code → (min, max)
+    current: dict[int, int] = {}  # code → current value
     abs_names: dict[int, str] = {}
 
     for code, info in abs_axes:
@@ -105,8 +110,8 @@ def main() -> None:
         current[code] = info.value
         abs_names[code] = ecodes.ABS.get(code, f"ABS_{code}")
 
-    last_button: tuple[int, int, float] | None = None   # (code, value, mono_time)
-    last_axis:   tuple[int, int, float] | None = None   # (code, value, mono_time)
+    last_button: tuple[int, int, float] | None = None  # (code, value, mono_time)
+    last_axis: tuple[int, int, float] | None = None  # (code, value, mono_time)
 
     BAR_W = 26
     N_AXES = len(observed)
@@ -152,14 +157,14 @@ def main() -> None:
             try:
                 info = dev.absinfo(code)
                 span = info.max - info.min or 1
-                lo_pos  = max(0, min(BAR_W - 1, int((lo  - info.min) / span * BAR_W)))
+                lo_pos = max(0, min(BAR_W - 1, int((lo - info.min) / span * BAR_W)))
                 cur_pos = max(0, min(BAR_W - 1, int((cur - info.min) / span * BAR_W)))
-                hi_pos  = max(0, min(BAR_W - 1, int((hi  - info.min) / span * BAR_W)))
-                bar = ['░'] * BAR_W
+                hi_pos = max(0, min(BAR_W - 1, int((hi - info.min) / span * BAR_W)))
+                bar = ["░"] * BAR_W
                 for i in range(lo_pos, hi_pos + 1):
-                    bar[i] = '█'
-                bar[cur_pos] = '│'
-                bar_str = ''.join(bar)
+                    bar[i] = "█"
+                bar[cur_pos] = "│"
+                bar_str = "".join(bar)
                 label = f"{name}({code})"
                 sys.stdout.write(
                     f"\033[2K  {label:<18}  cur={cur:6d}  min={lo:6d}  max={hi:6d}"
@@ -181,14 +186,16 @@ def main() -> None:
 
     old_settings = termios.tcgetattr(sys.stdin)
     try:
-        tty.setcbreak(sys.stdin.fileno())  # single-keypress without Enter; keeps output \n→\r\n
+        tty.setcbreak(
+            sys.stdin.fileno()
+        )  # single-keypress without Enter; keeps output \n→\r\n
 
         while True:
             r, _, _ = select.select([dev.fd, sys.stdin.fileno()], [], [], 0.1)
 
             if sys.stdin.fileno() in r:
                 ch = sys.stdin.read(1)
-                if ch in ("q", "Q", "\x03", "\x04"):   # q, Q, Ctrl-C, Ctrl-D
+                if ch in ("q", "Q", "\x03", "\x04"):  # q, Q, Ctrl-C, Ctrl-D
                     break
                 if ch in ("r", "R"):
                     for code in list(observed):

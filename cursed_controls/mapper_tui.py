@@ -32,14 +32,27 @@ _DPAD_SURFACES = {
 
 # Ordered list for the numbered surface picker menu
 _SURFACE_MENU_ORDER: list[Surface] = [
-    Surface.A, Surface.B, Surface.X, Surface.Y,
-    Surface.BUMPER_L, Surface.BUMPER_R,
-    Surface.STICK_L, Surface.STICK_R,
-    Surface.START, Surface.OPTIONS, Surface.XBOX,
-    Surface.DPAD_UP, Surface.DPAD_DOWN, Surface.DPAD_LEFT, Surface.DPAD_RIGHT,
-    Surface.LEFT_JOYSTICK_X, Surface.LEFT_JOYSTICK_Y,
-    Surface.RIGHT_JOYSTICK_X, Surface.RIGHT_JOYSTICK_Y,
-    Surface.LEFT_TRIGGER, Surface.RIGHT_TRIGGER,
+    Surface.A,
+    Surface.B,
+    Surface.X,
+    Surface.Y,
+    Surface.BUMPER_L,
+    Surface.BUMPER_R,
+    Surface.STICK_L,
+    Surface.STICK_R,
+    Surface.START,
+    Surface.OPTIONS,
+    Surface.XBOX,
+    Surface.DPAD_UP,
+    Surface.DPAD_DOWN,
+    Surface.DPAD_LEFT,
+    Surface.DPAD_RIGHT,
+    Surface.LEFT_JOYSTICK_X,
+    Surface.LEFT_JOYSTICK_Y,
+    Surface.RIGHT_JOYSTICK_X,
+    Surface.RIGHT_JOYSTICK_Y,
+    Surface.LEFT_TRIGGER,
+    Surface.RIGHT_TRIGGER,
 ]
 
 
@@ -207,8 +220,13 @@ class InputDetector:
                 try:
                     for event in self._device.read():
                         if event.type == ecodes.EV_ABS:
-                            lo, hi = obs_range.get(event.code, (event.value, event.value))
-                            obs_range[event.code] = (min(lo, event.value), max(hi, event.value))
+                            lo, hi = obs_range.get(
+                                event.code, (event.value, event.value)
+                            )
+                            obs_range[event.code] = (
+                                min(lo, event.value),
+                                max(hi, event.value),
+                            )
                         candidate = self._score(event, baseline)
                         if candidate is None:
                             continue
@@ -230,7 +248,11 @@ class InputDetector:
             return early, None
 
         calibrated = None
-        if best is not None and best.ev_type == ecodes.EV_ABS and best.ev_code in obs_range:
+        if (
+            best is not None
+            and best.ev_type == ecodes.EV_ABS
+            and best.ev_code in obs_range
+        ):
             lo, hi = obs_range[best.ev_code]
             if hi > lo:
                 calibrated = (lo, hi)
@@ -391,7 +413,7 @@ class SmartDefaults:
 def _pick_surface(already_mapped: set[Surface]) -> Surface | None:
     """Numbered surface picker menu grouped by buttons / axes."""
     buttons = [s for s in _SURFACE_MENU_ORDER if s.is_button]
-    axes    = [s for s in _SURFACE_MENU_ORDER if s.is_axis]
+    axes = [s for s in _SURFACE_MENU_ORDER if s.is_axis]
 
     def _fmt(s: Surface, idx: int) -> str:
         marker = "[*]" if s in already_mapped else "   "
@@ -401,7 +423,7 @@ def _pick_surface(already_mapped: set[Surface]) -> Surface | None:
     print("    Buttons:")
     btn_cols = 4
     for row_start in range(0, len(buttons), btn_cols):
-        row = buttons[row_start:row_start + btn_cols]
+        row = buttons[row_start : row_start + btn_cols]
         print("      " + "  ".join(_fmt(s, _SURFACE_MENU_ORDER.index(s)) for s in row))
     print("    Axes:")
     for s in axes:
@@ -438,10 +460,10 @@ def _print_status_table(profile_id: str, mappings: list[dict]) -> None:
         return
     print(f"  Mapped so far [{profile_id}]:")
     for m in mappings:
-        tgt      = m["target"]
+        tgt = m["target"]
         src_type = _type_name(m["source_type"])
         src_code = _code_name(m["source_type"], m["source_code"])
-        kind     = m["kind"]
+        kind = m["kind"]
         extras: list[str] = []
         if "source_min" in m:
             extras.append(f"src:{m['source_min']}..{m['source_max']}")
@@ -457,7 +479,7 @@ def _print_status_table(profile_id: str, mappings: list[dict]) -> None:
 
 def _describe_candidate(c: CandidateEvent) -> str:
     name = _code_name(c.ev_type, c.ev_code)
-    typ  = _type_name(c.ev_type)
+    typ = _type_name(c.ev_type)
     if c.ev_type == ecodes.EV_KEY:
         return f"{typ} {c.ev_code} ({name})  [button]"
     abs_info = c.abs_info
@@ -492,7 +514,9 @@ class MapperTUI:
                 if existing_devices:
                     ids = ", ".join(d.get("id", "?") for d in existing_devices)
                     print(f"  {len(existing_devices)} existing profile(s): {ids}")
-                    print("  Re-mapping a profile replaces it; new profiles are appended.")
+                    print(
+                        "  Re-mapping a profile replaces it; new profiles are appended."
+                    )
             except Exception as e:
                 print(f"Warning: could not load existing config ({e}), starting fresh.")
 
@@ -527,9 +551,9 @@ class MapperTUI:
 
         handled = False
         for device in self._existing_devices.values():
-            conn      = device.get("connection", {})
+            conn = device.get("connection", {})
             conn_type = conn.get("type", "evdev")
-            name      = device.get("match", {}).get("name")
+            name = device.get("match", {}).get("name")
 
             if conn_type == "wiimote":
                 handled = True
@@ -570,7 +594,7 @@ class MapperTUI:
 
         for info, ev_dev in devices:
             profile_id = self._ask_profile_id(info)
-            mappings   = self._step_map_device(info, ev_dev, profile_id)
+            mappings = self._step_map_device(info, ev_dev, profile_id)
             if mappings:
                 match_key = "uniq" if info.uniq else "name" if info.name else "phys"
                 match_val = info.uniq or info.name or info.phys
@@ -627,8 +651,8 @@ class MapperTUI:
     def _ask_profile_id(self, info: DiscoveredDevice) -> str:
         default = info.name.replace(" ", "-") if info.name else "device"
         print()
-        print(f'  Profile ID: a short name for this device in the config file.')
-        print(f'  It appears in logs and is used to match/update existing profiles.')
+        print(f"  Profile ID: a short name for this device in the config file.")
+        print(f"  It appears in logs and is used to match/update existing profiles.")
         print(f'  Examples: "wiimote", "nunchuk", "my-gamepad"')
         raw = input(f"  Profile ID [{default}]: ").strip()
         return raw or default
@@ -649,7 +673,11 @@ class MapperTUI:
 
         while True:
             print("  ─────────────────────────────────────────────────")
-            prompt = input("  [Enter] detect next   [d] done   [u] undo last\n  > ").strip().lower()
+            prompt = (
+                input("  [Enter] detect next   [d] done   [u] undo last\n  > ")
+                .strip()
+                .lower()
+            )
 
             if prompt == "d":
                 break
@@ -674,13 +702,19 @@ class MapperTUI:
             print("  Sampling baseline...", end="", flush=True)
             baseline = detector.sample_baseline(0.3)
             if detector.noisy_axes:
-                noisy_names = [_code_name(ecodes.EV_ABS, c) for c in detector.noisy_axes]
-                print(f"\n  ⚠  Drifty axes detected ({', '.join(noisy_names)})"
-                      " — push firmly and hold to the extreme")
+                noisy_names = [
+                    _code_name(ecodes.EV_ABS, c) for c in detector.noisy_axes
+                ]
+                print(
+                    f"\n  ⚠  Drifty axes detected ({', '.join(noisy_names)})"
+                    " — push firmly and hold to the extreme"
+                )
             else:
                 print()
 
-            candidate, calibrated_range = detector.detect_and_calibrate(baseline, duration_s=6.0)
+            candidate, calibrated_range = detector.detect_and_calibrate(
+                baseline, duration_s=6.0
+            )
 
             if candidate is None:
                 print("  No input detected.")
@@ -691,7 +725,9 @@ class MapperTUI:
 
             print(f"  Detected: {_describe_candidate(candidate)}")
             if calibrated_range:
-                print(f"  Calibrated range: {calibrated_range[0]}..{calibrated_range[1]}")
+                print(
+                    f"  Calibrated range: {calibrated_range[0]}..{calibrated_range[1]}"
+                )
 
             src_key = (candidate.ev_type, candidate.ev_code)
             if src_key in mapped_sources:
@@ -713,10 +749,15 @@ class MapperTUI:
             if (
                 candidate.ev_type == ecodes.EV_ABS
                 and candidate.abs_info is not None
-                and candidate.value < (candidate.abs_info.min + candidate.abs_info.max) / 2
+                and candidate.value
+                < (candidate.abs_info.min + candidate.abs_info.max) / 2
                 and surface in _JOYSTICK_SURFACES
             ):
-                ans = input("  Axis moved in the negative direction — invert? (y/N): ").strip().lower()
+                ans = (
+                    input("  Axis moved in the negative direction — invert? (y/N): ")
+                    .strip()
+                    .lower()
+                )
                 if ans == "y":
                     mapping["invert"] = True
 
@@ -738,11 +779,11 @@ class MapperTUI:
         for pi, profile in enumerate(self.profiles):
             print(f"Profile [{profile['id']}]  match: {profile['match']}")
             for mi, m in enumerate(profile.get("mappings", [])):
-                label    = f"  [{len(all_mappings)}] "
-                src      = f"{_type_name(m['source_type'])} {_code_name(m['source_type'], m['source_code'])}"
-                tgt      = m["target"]
-                kind     = m["kind"]
-                extra    = ""
+                label = f"  [{len(all_mappings)}] "
+                src = f"{_type_name(m['source_type'])} {_code_name(m['source_type'], m['source_code'])}"
+                tgt = m["target"]
+                kind = m["kind"]
+                extra = ""
                 if "source_min" in m:
                     extra = f"  src:{m['source_min']}..{m['source_max']}"
                 print(f"{label}{src:<28} → {tgt:<22} [{kind}]{extra}")
@@ -773,4 +814,6 @@ class MapperTUI:
             f.write(text)
         print(f"\nSaved to {self.output_path}")
         if self._existing_runtime.get("output_mode") == "stdout":
-            print("Change runtime.output_mode to 'gadget' when ready to run on hardware.")
+            print(
+                "Change runtime.output_mode to 'gadget' when ready to run on hardware."
+            )

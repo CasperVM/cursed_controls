@@ -25,6 +25,7 @@ def detect_udc() -> str:
         "Run init-raspbian.sh first, or check that dtoverlay=dwc2 is in config.txt and reboot."
     )
 
+
 from cursed_controls.xbox import XboxControllerState
 
 
@@ -112,7 +113,9 @@ class RawGadgetSink(OutputSink):
     ):
         self._library_path = library_path
         self._num_slots = num_slots
-        self._driver = driver   # resolved in open() so detect_udc() runs at the right time
+        self._driver = (
+            driver  # resolved in open() so detect_udc() runs at the right time
+        )
         self._device = device
         self._lib = None
         self._handle: Optional[int] = None
@@ -153,7 +156,17 @@ class RawGadgetSink(OutputSink):
         # device_name in usb_raw_init is the UDC instance name, same as driver_name.
         # It is NOT the /dev/raw-gadget path (that is opened internally by the library).
         resolved_device = self._device or resolved_driver
-        handle = lib.x360_open(self._num_slots, resolved_driver.encode(), resolved_device.encode())
+        handle = None
+        for attempt in range(5):
+            handle = lib.x360_open(
+                self._num_slots, resolved_driver.encode(), resolved_device.encode()
+            )
+            if handle:
+                break
+            print(f"[x360] x360_open failed (attempt {attempt + 1}/5), retrying in 1s…")
+            import time as _time
+
+            _time.sleep(1.0)
         if not handle:
             raise RuntimeError(
                 "x360_open failed (check UDC driver name and root permissions)"

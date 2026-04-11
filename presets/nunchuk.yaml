@@ -1,0 +1,27 @@
+display_name: Wii Nunchuk — Standard
+match:
+  name: Nintendo Wii Remote Nunchuk
+mappings:
+  - {source_type: 1, source_code: 306, target: BUMPER_L,      kind: button, label: C}
+  - {source_type: 1, source_code: 309, target: LEFT_TRIGGER,  kind: button, label: Z, on_value: 255, off_value: 0}
+  - source_type: 3
+    source_code: 16
+    target: LEFT_JOYSTICK_X
+    kind: axis
+    label: Stick X
+    source_min: -120
+    source_max: 120
+    target_min: -32767
+    target_max: 32767
+    deadzone: 0.05
+  - source_type: 3
+    source_code: 17
+    target: LEFT_JOYSTICK_Y
+    kind: axis
+    label: Stick Y
+    source_min: -120
+    source_max: 120
+    target_min: -32767
+    target_max: 32767
+    deadzone: 0.05
+    invert: true

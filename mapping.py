@@ -124,7 +124,7 @@ def device_path_to_meta(device: evdev.InputDevice) -> InputDeviceMetadata:
     parent_uhid = None
     try:
         parent_uhid = split_sysfs_path[split_sysfs_path.index("uhid") + 1]
-    except:
+    except ValueError:
         pass
 
     # Determine if this is the main device under the UHID handle
@@ -142,7 +142,7 @@ def device_path_to_meta(device: evdev.InputDevice) -> InputDeviceMetadata:
                     == event_real
                 ):
                     is_parent = True
-    except:
+    except OSError:
         pass
 
     return InputDeviceMetadata(
@@ -409,8 +409,10 @@ def use_mapping_file(in_name: str, debug_print=False, dry_run=False):
         json_mappings = None
         with open(in_name) as file_mapping:
             json_mappings = json.loads("\n".join(file_mapping.readlines()))
-        if json_mappings == None:
-            raise ValueError()
+        if json_mappings is None:
+            raise ValueError(
+                f"Mapping file {in_name} contained null JSON; expected a list of mappings"
+            )
         mappings: list[InputMapping] = [
             InputMapping(
                 device_identifier=m.get("device_identifier"),
@@ -495,7 +497,7 @@ def use_mapping_file(in_name: str, debug_print=False, dry_run=False):
                                     trigger_axis.value = 0
                                     # might be 2 on repeat
                                     if event.value > 0:
-                                        trigger_axis = 255
+                                        trigger_axis.value = 255
                                 case _:
                                     # -32767 - 0 - 32767
                                     joystick_axis: JoystickAxis = xboxstate.by_enum(

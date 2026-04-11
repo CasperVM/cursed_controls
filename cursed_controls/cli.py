@@ -31,6 +31,15 @@ def main() -> None:
     map_p = sub.add_parser("map", help="interactive TUI to build a mapping config")
     map_p.add_argument("output", help="output YAML path")
 
+    serve_p = sub.add_parser("serve", help="start the web UI server")
+    serve_p.add_argument(
+        "config", nargs="?", help="optional config YAML/JSON to preload"
+    )
+    serve_p.add_argument(
+        "--host", default="0.0.0.0", help="bind address (default: 0.0.0.0)"
+    )
+    serve_p.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
+
     args = parser.parse_args()
     if args.cmd == "list-devices":
         print(json.dumps([asdict(d) for d in list_devices()], indent=2))
@@ -45,6 +54,19 @@ def main() -> None:
         from cursed_controls.mapper_tui import MapperTUI
 
         MapperTUI(args.output).run()
+        return
+
+    if args.cmd == "serve":
+        import uvicorn
+        from cursed_controls.app_state import AppState
+        from cursed_controls.web.server import create_app
+
+        state = AppState()
+        if args.config:
+            state.config = load_config(args.config)
+            state.config_path = args.config
+        app = create_app(state)
+        uvicorn.run(app, host=args.host, port=args.port)
         return
 
     config = load_config(args.config)

@@ -26,6 +26,7 @@ from cursed_controls.runtime import (
     Mapper,
     PlannedBinding,
     Runtime,
+    _RECONNECT_INTERVAL_S,
     _scale,
 )
 from cursed_controls.xbox import Surface
@@ -459,3 +460,255 @@ def test_pre_connect_wiimote_profile_scans_and_connects():
     mock_scan.assert_called_once_with(10.0, None)
     mock_connect.assert_called_once_with("AA:BB:CC:DD:EE:FF", timeout=10.0)
     mock_wait.assert_called_once_with("Nintendo Wii Remote", timeout=10.0)
+
+
+def test_pre_connect_persists_mac_for_wiimote():
+    """After a successful Wiimote connect, the MAC is stored for later reconnect."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE, timeout_s=10.0),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+
+    with (
+        patch(
+            "cursed_controls.runtime.scan_for_wiimote",
+            return_value="AA:BB:CC:DD:EE:FF",
+        ),
+        patch("cursed_controls.runtime.connect_wiimote"),
+        patch("cursed_controls.runtime.wait_for_evdev"),
+        patch("cursed_controls.runtime.list_devices", return_value=[]),
+    ):
+        runtime._pre_connect()
+
+    assert runtime._connected_macs.get("wiimote") == "AA:BB:CC:DD:EE:FF"
+
+
+def test_pre_connect_persists_mac_for_bluetooth():
+    """After a BLUETOOTH connect, the configured MAC is stored."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="pad",
+        match=DeviceMatch(name="GamePad"),
+        connection=ConnectionConfig(
+            type=ConnectionType.BLUETOOTH, mac="11:22:33:44:55:66", timeout_s=10.0
+        ),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+
+    with (
+        patch("cursed_controls.runtime.connect_device"),
+        patch("cursed_controls.runtime.wait_for_evdev"),
+        patch("cursed_controls.runtime.list_devices", return_value=[]),
+    ):
+        runtime._pre_connect()
+
+    assert runtime._connected_macs.get("pad") == "11:22:33:44:55:66"
+
+
+def test_try_reconnect_bt_skips_when_no_mac():
+    """No reconnect attempt if no MAC is known."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+
+    with patch("cursed_controls.runtime.reconnect_bluetooth") as mock_reconnect:
+        runtime._try_reconnect_bt(profile)
+
+    mock_reconnect.assert_not_called()
+
+
+def test_try_reconnect_bt_skips_when_throttled():
+    """No reconnect attempt if the throttle interval hasn't elapsed."""
+    from unittest.mock import patch
+    import time
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+    runtime._connected_macs["wiimote"] = "AA:BB:CC:DD:EE:FF"
+    # Pretend we just tried
+    runtime._last_reconnect["wiimote"] = time.monotonic()
+
+    with patch("cursed_controls.runtime.reconnect_bluetooth") as mock_reconnect:
+        runtime._try_reconnect_bt(profile)
+
+    mock_reconnect.assert_not_called()
+
+
+def test_try_reconnect_bt_skips_when_already_connected():
+    """No reconnect if bluetoothctl already reports the device as connected."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+    runtime._connected_macs["wiimote"] = "AA:BB:CC:DD:EE:FF"
+
+    with (
+        patch("cursed_controls.runtime.is_device_connected", return_value=True),
+        patch("cursed_controls.runtime.reconnect_bluetooth") as mock_reconnect,
+    ):
+        runtime._try_reconnect_bt(profile)
+
+    mock_reconnect.assert_not_called()
+
+
+def test_try_reconnect_bt_calls_reconnect_and_waits_for_evdev():
+    """When disconnected, calls reconnect_bluetooth then waits for evdev node."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE),
+    )
+    config = AppConfig(runtime=RuntimeConfig(), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+    runtime._connected_macs["wiimote"] = "AA:BB:CC:DD:EE:FF"
+
+    with (
+        patch("cursed_controls.runtime.is_device_connected", return_value=False),
+        patch(
+            "cursed_controls.runtime.reconnect_bluetooth", return_value=True
+        ) as mock_reconnect,
+        patch("cursed_controls.runtime.wait_for_evdev") as mock_wait,
+    ):
+        runtime._try_reconnect_bt(profile)
+
+    mock_reconnect.assert_called_once_with(
+        "AA:BB:CC:DD:EE:FF", True, timeout=5.0, max_retries=3, backoff=1.0
+    )
+    mock_wait.assert_called_once_with("Nintendo Wii Remote", timeout=10.0)
+
+
+def test_rescan_calls_reconnect_for_bt_profiles():
+    """_rescan_if_due triggers _try_reconnect_bt for BT/Wiimote pending profiles."""
+    from unittest.mock import patch
+
+    profile = DeviceProfile(
+        id="wiimote",
+        match=DeviceMatch(name="Nintendo Wii Remote"),
+        connection=ConnectionConfig(type=ConnectionType.WIIMOTE),
+    )
+    config = AppConfig(runtime=RuntimeConfig(rescan_interval_ms=0), devices=[profile])
+    runtime = Runtime(config, FakeSink())
+    runtime.selector = FakeSelector()
+    runtime.pending_profiles = [profile]
+    runtime._connected_macs["wiimote"] = "AA:BB:CC:DD:EE:FF"
+
+    with (
+        patch.object(runtime, "_try_reconnect_bt") as mock_reconnect,
+        patch.object(runtime, "_try_bind_pending"),
+    ):
+        runtime._rescan_if_due()
+
+    mock_reconnect.assert_called_once_with(profile)
+
+
+import threading, time
+
+
+def test_runtime_stop_exits_run_loop():
+    from cursed_controls.config import AppConfig, RuntimeConfig
+    from cursed_controls.output import FakeSink
+    from cursed_controls.runtime import Runtime
+
+    config = AppConfig(runtime=RuntimeConfig(rescan_interval_ms=100), devices=[])
+    sink = FakeSink()
+    rt = Runtime(config, sink)
+    thread = threading.Thread(target=rt.run, daemon=True)
+    thread.start()
+    time.sleep(0.05)
+    rt.stop()
+    thread.join(timeout=2.0)
+    assert not thread.is_alive(), "Runtime did not stop within timeout"
+
+
+def test_runtime_on_event_fires():
+    from cursed_controls.config import AppConfig, RuntimeConfig
+    from cursed_controls.output import FakeSink
+    from cursed_controls.runtime import Runtime
+
+    events = []
+    config = AppConfig(runtime=RuntimeConfig(rescan_interval_ms=100), devices=[])
+    rt = Runtime(config, FakeSink(), on_event=events.append)
+    rt._fire_event({"type": "test"})
+    assert events == [{"type": "test"}]
+
+
+def test_runtime_on_event_called_on_bind():
+    """Verify _try_bind_pending fires device_bound via the on_event callback."""
+    from cursed_controls.config import (
+        AppConfig,
+        ConnectionConfig,
+        DeviceMatch,
+        DeviceProfile,
+        RuntimeConfig,
+    )
+    from cursed_controls.discovery import DiscoveredDevice
+    from cursed_controls.output import FakeSink
+    from cursed_controls.runtime import Runtime
+
+    events = []
+    config = AppConfig(
+        runtime=RuntimeConfig(rescan_interval_ms=100),
+        devices=[
+            DeviceProfile(id="pad", match=DeviceMatch(name="TestPad")),
+        ],
+    )
+    rt = Runtime(config, FakeSink(), on_event=events.append)
+
+    discovered = [
+        DiscoveredDevice(
+            path="/dev/input/event0",
+            name="TestPad",
+            uniq="",
+            phys="",
+            parent_uhid=None,
+            is_composite=False,
+            is_composite_parent=True,
+        )
+    ]
+
+    # Patch open_bindings to avoid actually opening /dev/input/event0
+    from unittest.mock import patch, MagicMock
+
+    fake_bound = MagicMock()
+    fake_bound.fd = 99
+    fake_bound.profile = config.devices[0]
+    fake_bound.info = discovered[0]
+
+    with (
+        patch.object(rt, "open_bindings", return_value=[fake_bound]),
+        patch.object(rt, "register_bound_devices"),
+    ):
+        rt.pending_profiles = list(config.devices)
+        rt._try_bind_pending.__func__  # confirm it's there
+        # Patch list_devices to return our discovered device
+        with patch("cursed_controls.runtime.list_devices", return_value=discovered):
+            rt._try_bind_pending()
+
+    assert any(
+        e.get("type") == "device_bound" and e.get("profile_id") == "pad" for e in events
+    ), f"Expected device_bound event, got: {events}"

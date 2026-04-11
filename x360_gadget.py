@@ -5,7 +5,11 @@ import time
 from x360 import XboxControllerState
 
 # Path to shared lib
-LIB_PATH = os.path.join("360-w-raw-gadget", "lib360wgadget.so")
+LIB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "360-w-raw-gadget",
+    "lib360wgadget.so",
+)
 
 # Load the shared library
 lib = ctypes.CDLL(LIB_PATH)

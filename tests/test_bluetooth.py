@@ -3,7 +3,13 @@
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
-from cursed_controls.bluetooth import connect_device, scan_for_wiimote, wait_for_evdev
+from cursed_controls.bluetooth import (
+    connect_device,
+    is_device_connected,
+    reconnect_bluetooth,
+    scan_for_wiimote,
+    wait_for_evdev,
+)
 from cursed_controls.discovery import DiscoveredDevice
 
 
@@ -26,7 +32,11 @@ def _make_discovered(name: str) -> DiscoveredDevice:
 
 def test_connect_device_returns_true_on_success():
     # pair → "", trust → "", connect → "Connection successful"
-    responses = ["", "", "Attempting to connect to AA:BB:CC:DD:EE:FF\nConnection successful\n"]
+    responses = [
+        "",
+        "",
+        "Attempting to connect to AA:BB:CC:DD:EE:FF\nConnection successful\n",
+    ]
 
     def side_effect(*args, **kwargs):
         r = MagicMock()
@@ -110,8 +120,7 @@ def test_scan_for_wiimote_finds_nintendo_device():
 
 def test_scan_for_wiimote_returns_none_when_no_nintendo_found():
     scan_output = (
-        "Discovery started\n"
-        "[NEW] Device 77:88:99:AA:BB:CC Some Other Device\n"
+        "Discovery started\n[NEW] Device 77:88:99:AA:BB:CC Some Other Device\n"
     )
     mock_proc = MagicMock()
     # After the two lines, readline returns "" (EOF)
@@ -133,7 +142,10 @@ def test_scan_for_wiimote_returns_none_when_no_nintendo_found():
         patch("cursed_controls.bluetooth.subprocess.run", return_value=_mock_run()),
         patch("cursed_controls.bluetooth.subprocess.Popen", return_value=mock_proc),
         patch("cursed_controls.bluetooth.select.select", side_effect=fake_select),
-        patch("cursed_controls.bluetooth.time.monotonic", side_effect=[0, 0, 1, 1, 2, 2, 99]),
+        patch(
+            "cursed_controls.bluetooth.time.monotonic",
+            side_effect=[0, 0, 1, 1, 2, 2, 99],
+        ),
     ):
         result = scan_for_wiimote(timeout=1.5)
 
@@ -152,6 +164,93 @@ def test_wait_for_evdev_finds_device():
         patch("cursed_controls.bluetooth.time.sleep"),
     ):
         assert wait_for_evdev("Nintendo Wii Remote", timeout=5.0) is True
+
+
+# ---------------------------------------------------------------------------
+# is_device_connected
+# ---------------------------------------------------------------------------
+
+
+def test_is_device_connected_returns_true_when_yes():
+    with patch(
+        "cursed_controls.bluetooth.subprocess.run",
+        return_value=_mock_run(
+            "Device AA:BB:CC:DD:EE:FF (public)\n\tConnected: yes\n\tPaired: yes\n"
+        ),
+    ):
+        assert is_device_connected("AA:BB:CC:DD:EE:FF") is True
+
+
+def test_is_device_connected_returns_false_when_no():
+    with patch(
+        "cursed_controls.bluetooth.subprocess.run",
+        return_value=_mock_run(
+            "Device AA:BB:CC:DD:EE:FF (public)\n\tConnected: no\n\tPaired: yes\n"
+        ),
+    ):
+        assert is_device_connected("AA:BB:CC:DD:EE:FF") is False
+
+
+def test_is_device_connected_returns_false_on_empty_output():
+    with patch(
+        "cursed_controls.bluetooth.subprocess.run",
+        return_value=_mock_run(""),
+    ):
+        assert is_device_connected("AA:BB:CC:DD:EE:FF") is False
+
+
+# ---------------------------------------------------------------------------
+# reconnect_bluetooth
+# ---------------------------------------------------------------------------
+
+
+def test_reconnect_bluetooth_returns_true_on_first_attempt():
+    with patch(
+        "cursed_controls.bluetooth.connect_wiimote", return_value=True
+    ) as mock_conn:
+        result = reconnect_bluetooth(
+            "AA:BB:CC:DD:EE:FF", is_wiimote=True, timeout=5.0, max_retries=3
+        )
+    assert result is True
+    assert mock_conn.call_count == 1
+
+
+def test_reconnect_bluetooth_retries_and_succeeds():
+    side_effects = [False, False, True]
+    with (
+        patch(
+            "cursed_controls.bluetooth.connect_wiimote", side_effect=side_effects
+        ) as mock_conn,
+        patch("cursed_controls.bluetooth.time.sleep"),
+    ):
+        result = reconnect_bluetooth(
+            "AA:BB:CC:DD:EE:FF", is_wiimote=True, timeout=5.0, max_retries=3
+        )
+    assert result is True
+    assert mock_conn.call_count == 3
+
+
+def test_reconnect_bluetooth_returns_false_after_max_retries():
+    with (
+        patch("cursed_controls.bluetooth.connect_device", return_value=False),
+        patch("cursed_controls.bluetooth.time.sleep"),
+    ):
+        result = reconnect_bluetooth(
+            "AA:BB:CC:DD:EE:FF", is_wiimote=False, timeout=5.0, max_retries=3
+        )
+    assert result is False
+
+
+def test_reconnect_bluetooth_uses_connect_device_for_non_wiimote():
+    with (
+        patch("cursed_controls.bluetooth.connect_device", return_value=True) as mock_bt,
+        patch("cursed_controls.bluetooth.connect_wiimote") as mock_wii,
+    ):
+        reconnect_bluetooth(
+            "AA:BB:CC:DD:EE:FF", is_wiimote=False, timeout=5.0, max_retries=1
+        )
+    mock_bt.assert_called_once()
+    mock_wii.assert_not_called()
 
 
 def test_wait_for_evdev_times_out():

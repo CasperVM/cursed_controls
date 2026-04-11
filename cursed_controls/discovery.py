@@ -29,7 +29,7 @@ def _parent_info(event_path: str) -> tuple[str | None, bool, bool]:
     parent = None
     try:
         parent = parts[parts.index("uhid") + 1]
-    except Exception:
+    except ValueError:
         parent = None
     is_parent = parent is None
     try:
@@ -43,7 +43,7 @@ def _parent_info(event_path: str) -> tuple[str | None, bool, bool]:
                     and os.path.realpath(str(uhid_input_path / first)) == event_real
                 ):
                     is_parent = True
-    except Exception:
+    except OSError:
         pass
     return parent, bool(parent), is_parent
 
@@ -51,17 +51,33 @@ def _parent_info(event_path: str) -> tuple[str | None, bool, bool]:
 def list_devices() -> list[DiscoveredDevice]:
     devices: list[DiscoveredDevice] = []
     for path in evdev.list_devices():
-        dev = evdev.InputDevice(path)
-        parent, is_comp, is_parent = _parent_info(path)
-        devices.append(
-            DiscoveredDevice(
-                path=path,
-                name=dev.name or "",
-                uniq=dev.uniq or "",
-                phys=dev.phys or "",
-                parent_uhid=parent,
-                is_composite=is_comp,
-                is_composite_parent=is_parent,
+        try:
+            dev = evdev.InputDevice(path)
+        except OSError:
+            continue  # device disappeared between listing and opening
+        try:
+            phys = dev.phys or ""
+            name = dev.name or ""
+            name_lower = name.lower()
+            if "hdmi" in phys.lower() or "hdmi" in name_lower:
+                continue  # skip vc4-hdmi and similar display devices
+            if any(
+                kw in name_lower
+                for kw in (" imu", "accelerometer", "motion sensor", "gyro")
+            ):
+                continue  # skip IMU/motion sensor nodes (e.g. hid-nintendo IMU)
+            parent, is_comp, is_parent = _parent_info(path)
+            devices.append(
+                DiscoveredDevice(
+                    path=path,
+                    name=name,
+                    uniq=dev.uniq or "",
+                    phys=phys,
+                    parent_uhid=parent,
+                    is_composite=is_comp,
+                    is_composite_parent=is_parent,
+                )
             )
-        )
+        finally:
+            dev.close()
     return devices

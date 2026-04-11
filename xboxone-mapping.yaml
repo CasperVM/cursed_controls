@@ -1,0 +1,99 @@
+runtime:
+  output_mode: stdout
+  poll_interval_ms: 1
+  gadget_library: 360-w-raw-gadget/target/release/libx360_w_raw_gadget.so
+  interfaces: 1
+  rumble: true
+  rescan_interval_ms: 2000
+  rumble_timeout_s: 0.5
+  rumble_heartbeat_s: 0.05
+  rumble_stop_debounce_s: 0.4
+  rumble_activate_count: 2
+  rumble_activate_window_s: 4
+devices:
+- id: Xbox Controller
+  match:
+    name: Xbox Wireless Controller
+  mappings:
+  - source_type: 1
+    source_code: 304
+    target: A
+    kind: button
+  - source_type: 1
+    source_code: 307
+    target: X
+    kind: button
+  - source_type: 1
+    source_code: 308
+    target: Y
+    kind: button
+  - source_type: 1
+    source_code: 305
+    target: B
+    kind: button
+  - source_type: 1
+    source_code: 310
+    target: BUMPER_L
+    kind: button
+  - source_type: 1
+    source_code: 311
+    target: BUMPER_R
+    kind: button
+  - source_type: 1
+    source_code: 314
+    target: OPTIONS
+    kind: button
+  - source_type: 1
+    source_code: 316
+    target: XBOX
+    kind: button
+  - source_type: 1
+    source_code: 315
+    target: START
+    kind: button
+  - source_type: 3
+    source_code: 0
+    target: LEFT_JOYSTICK_X
+    kind: button
+    on_value: 32767
+    off_value: 0
+  - source_type: 3
+    source_code: 1
+    target: LEFT_JOYSTICK_Y
+    kind: button
+    on_value: 32767
+    off_value: 0
+  - source_type: 3
+    source_code: 17
+    target: DPAD_UP
+    kind: button
+  - source_type: 3
+    source_code: 17
+    target: DPAD_DOWN
+    kind: button
+  - source_type: 3
+    source_code: 16
+    target: DPAD_LEFT
+    kind: button
+  - source_type: 3
+    source_code: 16
+    target: DPAD_RIGHT
+    kind: button
+  - source_type: 3
+    source_code: 10
+    target: LEFT_TRIGGER
+    kind: button
+  - source_type: 3
+    source_code: 9
+    target: RIGHT_TRIGGER
+    kind: button
+  - source_type: 3
+    source_code: 2
+    target: RIGHT_JOYSTICK_X
+    kind: button
+  - source_type: 3
+    source_code: 5
+    target: RIGHT_JOYSTICK_Y
+    kind: button
+    on_value: 32767
+    off_value: 0

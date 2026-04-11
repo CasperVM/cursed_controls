@@ -1,0 +1,15 @@
+display_name: Wii Remote — Rocket League (Horizontal)
+match:
+  name: Nintendo Wii Remote
+mappings:
+  - {source_type: 1, source_code: 304, target: A,             kind: button, label: A / Jump}
+  - {source_type: 1, source_code: 305, target: RIGHT_TRIGGER, kind: button, label: B / Throttle, on_value: 255, off_value: 0}
+  - {source_type: 1, source_code: 108, target: B,             kind: button, label: Down / Boost}
+  - {source_type: 1, source_code: 257, target: X,             kind: button, label: "1 / Ball Cam"}
+  - {source_type: 1, source_code: 407, target: START,         kind: button, label: +}
+  - {source_type: 1, source_code: 412, target: OPTIONS,       kind: button, label: -}
+  - {source_type: 1, source_code: 316, target: XBOX,          kind: button, label: Home}
+  - {source_type: 1, source_code: 103, target: DPAD_UP,       kind: button, label: D-Pad Up}
+  - {source_type: 1, source_code: 105, target: DPAD_LEFT,     kind: button, label: D-Pad Left}
+  - {source_type: 1, source_code: 106, target: DPAD_RIGHT,    kind: button, label: D-Pad Right}
+  - {source_type: 1, source_code: 258, target: DPAD_DOWN,     kind: button, label: "2 / D-Pad Down"}
