@@ -25,7 +25,7 @@ This is a visual mock of the web UI for quick exploration. It does not connect t
 
 1. Physical controllers connect to the Pi (Bluetooth, USB, etc.) and appear as evdev devices.
 2. `cursed-controls` reads their events, applies a YAML mapping config, and builds Xbox 360 HID packets.
-3. Packets are sent to [360-w-raw-gadget](360-w-raw-gadget/) (a submodule), which emulates a real Xbox 360 wireless receiver over the Pi's USB OTG port.
+3. Packets are sent to [360-w-raw-gadget](https://github.com/CasperVM/360-w-raw-gadget) (a submodule), which emulates a real Xbox 360 wireless receiver over the Pi's USB OTG port.
 4. Rumble commands from the host are forwarded back to any physical device that supports force feedback.
 
 ## Requirements
@@ -34,6 +34,7 @@ This is a visual mock of the web UI for quick exploration. It does not connect t
 - Python 3.11+
 - `raw_gadget` kernel module (handled by `install.sh`)
 - `360-w-raw-gadget` built as a shared library (handled by `install.sh`)
+- Plugging in the pi over USB (duh)
 
 ## Setup
 
@@ -62,9 +63,7 @@ bash ~/cursed_controls/install.sh [--headless-fast-boot]
 
 The installer is safe to re-run — each step skips if already complete.
 
-### After install
-
-`http://<pi-ip>:8000`
+### Web UI / After install go to: `http://<pi-ip>:8000`
 
 Open the web UI from another device on the same network at the above url.
 
