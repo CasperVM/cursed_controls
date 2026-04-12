@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from cursed_controls.app_state import AppState
-from cursed_controls.bluetooth import connect_device
+from cursed_controls.bluetooth import connect_device, connect_wiimote
 from cursed_controls.web.deps import get_runtime_manager, get_state
 
 router = APIRouter()
@@ -14,7 +14,8 @@ router = APIRouter()
 
 class ConnectRequest(BaseModel):
     mac: str
-    timeout: float = 15.0
+    name: str = ""
+    timeout: float = 30.0
 
 
 class MacRequest(BaseModel):
@@ -69,13 +70,16 @@ def _do_scan(state: AppState) -> None:
     state.broadcast({"type": "bt_scan", "event": "started"})
     try:
         proc = subprocess.Popen(
-            ["stdbuf", "-oL", "bluetoothctl", "scan", "on"],
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        if proc.stdout is None:
+        if proc.stdout is None or proc.stdin is None:
             return
+        proc.stdin.write("scan on\n")
+        proc.stdin.flush()
         deadline = time.monotonic() + 30.0
         while time.monotonic() < deadline:
             ready, _, _ = select.select([proc.stdout], [], [], 1.0)
@@ -112,6 +116,8 @@ def _do_scan(state: AppState) -> None:
                             "name": known[mac],
                         }
                     )
+        proc.stdin.write("scan off\n")
+        proc.stdin.flush()
         proc.terminate()
         proc.wait()
     except (OSError, FileNotFoundError):
@@ -122,7 +128,10 @@ def _do_scan(state: AppState) -> None:
 
 @router.post("/bt/connect")
 def bt_connect(req: ConnectRequest, state: AppState = Depends(get_state)):
-    ok = connect_device(req.mac, timeout=req.timeout)
+    if "nintendo" in req.name.lower():
+        ok = connect_wiimote(req.mac, timeout=req.timeout)
+    else:
+        ok = connect_device(req.mac, timeout=req.timeout)
     return {"ok": ok}
 
 

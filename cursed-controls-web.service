@@ -1,0 +1,22 @@
+[Unit]
+Description=cursed-controls web UI
+After=network.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__INSTALL_HOME__/cursed_controls
+ExecStartPre=/bin/bash __INSTALL_HOME__/cursed_controls/init-raspbian.sh
+ExecStart=__INSTALL_HOME__/cursed_controls/.venv/bin/python -u -m cursed_controls.cli serve __INSTALL_HOME__/cursed_controls/mapping.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+FinalKillSignal=SIGKILL
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

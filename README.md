@@ -1,10 +1,25 @@
 # cursed_controls
 
+[![Test](https://github.com/CasperVM/cursed_controls/actions/workflows/test.yml/badge.svg)](https://github.com/CasperVM/cursed_controls/actions/workflows/test.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-c51a4a)](https://www.raspberrypi.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+Universal controller receiver and mapper running on an sbc.
+
 Got a weird Bluetooth controller that nothing supports natively? Xbox 360 controllers work on nearly everything. So make it one.
 
-cursed_controls runs on a Raspberry Pi Zero between your controllers and the host, emulating a real Xbox 360 wireless receiver over USB OTG. Combine multiple physical devices into a single virtual Xbox pad (think Wii Remote + Nunchuk), with up to 4 controller slots. Works on Windows and Linux; macOS is limited to 1 slot.
+cursed_controls runs on a Raspberry Pi Zero between your controllers and the host, emulating a real Xbox 360 wireless receiver over USB OTG. Combine multiple physical devices into a single virtual Xbox pad (think Wii Remote + Nunchuk), with up to 4 controller slots. Works on Windows and Linux; macOS might limited to 1 slot on older versions.
 
-Tested on Raspberry Pi Zero 2W.
+I initially wanted to make this, as some games (especially in unity) can be super finicky about the controllers connected. e.g. even a wireless xbox controller can sometimes cause weird mappings and other issues. In these cases it's useful to 'act' as a wired controller, while still having the benefit of being wireless :D. This completely circumvents having to do painful config on the host/gaming machine where you just want to play. Instead you just let the pi handle it. This is also useful for when you just want to switch between multiple devices without having to repair your BT controllers CONSTANTLY.
+
+Tested on Raspberry Pi Zero W and Pi Zero 2W.
+
+> **Small disclaimer**: The hard part of initially making it work was done by hand. However, to finish this project and make it useful, this was partially vibe coded (yes I know, very bad. But finished is better than never seeing the light of day).
+
+## Demo of mapper UI
+
+(tbd)
 
 ## How it works
 
@@ -17,17 +32,50 @@ Tested on Raspberry Pi Zero 2W.
 
 - Raspberry Pi (or similar SBC) with a USB OTG port
 - Python 3.11+
-- `raw_gadget` kernel module
+- `raw_gadget` kernel module (handled by `install.sh`)
 - `360-w-raw-gadget` built as a shared library (handled by `install.sh`)
 
 ## Setup
 
-See [SetupRaspbian.md](SetupRaspbian.md) for the full Pi setup guide. The short version:
+See [SetupRaspbian.md](SetupRaspbian.md) for the full Pi setup guide.
+
+`curl|bash` oneline installs (RUN ON PI):
+
+**One-liner (recommended):**
 
 ```bash
-git clone https://github.com/Berghopper/cursed_controls.git
-bash ~/cursed_controls/install.sh
+curl -fsSL https://raw.githubusercontent.com/CasperVM/cursed_controls/main/install.sh | bash
 ```
+
+**Headless appliance** — faster boot, lower idle power, no HDMI:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CasperVM/cursed_controls/main/install.sh | bash -s -- --headless-fast-boot
+```
+
+**Prefer to inspect first?**
+
+```bash
+git clone https://github.com/CasperVM/cursed_controls.git
+bash ~/cursed_controls/install.sh [--headless-fast-boot]
+```
+
+The installer is safe to re-run — each step skips if already complete.
+
+`--headless-fast-boot` adds these settings to `config.txt`:
+
+```text
+hdmi_blanking=1
+hdmi_ignore_hotplug=1
+camera_auto_detect=0
+display_auto_detect=0
+dtparam=audio=off
+gpu_mem=16
+dtparam=act_led_trigger=none
+dtparam=act_led_activelow=on
+```
+
+It does not disable Wi-Fi or Bluetooth.
 
 ## Running
 
@@ -59,7 +107,7 @@ python scripts/show_axis_range.py /dev/input/eventN   # skip menu
 > directly. Use `show_axis_range.py` to find the real min/max values, then
 > set `source_min`/`source_max` by hand.
 
-The `cursed-controls` systemd service starts automatically on boot and loads `mapping.yaml` by default.
+The Raspberry Pi install uses `cursed-controls-web.service`, which starts the web UI on boot. From the UI, you can edit `mapping.yaml` and start or stop the gadget runtime.
 
 ## Config format
 

@@ -24,7 +24,7 @@ def test_bt_connect_calls_connect_device(client):
     ) as mock_cd:
         r = client.post("/api/bt/connect", json={"mac": "AA:BB:CC:DD:EE:FF"})
     assert r.status_code == 200
-    mock_cd.assert_called_once_with("AA:BB:CC:DD:EE:FF", timeout=15.0)
+    mock_cd.assert_called_once_with("AA:BB:CC:DD:EE:FF", timeout=30.0)
 
 
 def test_bt_connect_missing_mac_returns_422(client):

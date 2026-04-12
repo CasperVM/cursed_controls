@@ -216,10 +216,11 @@ def test_reconnect_bluetooth_returns_true_on_first_attempt():
 
 
 def test_reconnect_bluetooth_retries_and_succeeds():
-    side_effects = [False, False, True]
+    # Wiimotes use a single connect_wiimote call with a combined scan window,
+    # not individual retries, so we only expect one call.
     with (
         patch(
-            "cursed_controls.bluetooth.connect_wiimote", side_effect=side_effects
+            "cursed_controls.bluetooth.connect_wiimote", return_value=True
         ) as mock_conn,
         patch("cursed_controls.bluetooth.time.sleep"),
     ):
@@ -227,7 +228,7 @@ def test_reconnect_bluetooth_retries_and_succeeds():
             "AA:BB:CC:DD:EE:FF", is_wiimote=True, timeout=5.0, max_retries=3
         )
     assert result is True
-    assert mock_conn.call_count == 3
+    assert mock_conn.call_count == 1
 
 
 def test_reconnect_bluetooth_returns_false_after_max_retries():

@@ -437,6 +437,8 @@ def test_pre_connect_skips_evdev_profiles():
 
 
 def test_pre_connect_wiimote_profile_scans_and_connects():
+    # _pre_connect scans for the Wiimote MAC; if the device isn't already
+    # BT-connected it defers to the reconnect loop rather than blocking.
     from unittest.mock import patch
 
     profile = DeviceProfile(
@@ -452,14 +454,16 @@ def test_pre_connect_wiimote_profile_scans_and_connects():
             "cursed_controls.runtime.scan_for_wiimote",
             return_value="AA:BB:CC:DD:EE:FF",
         ) as mock_scan,
+        patch("cursed_controls.runtime.is_device_connected", return_value=False),
         patch("cursed_controls.runtime.connect_wiimote") as mock_connect,
         patch("cursed_controls.runtime.wait_for_evdev") as mock_wait,
     ):
         runtime._pre_connect()
 
     mock_scan.assert_called_once_with(10.0, None)
-    mock_connect.assert_called_once_with("AA:BB:CC:DD:EE:FF", timeout=10.0)
-    mock_wait.assert_called_once_with("Nintendo Wii Remote", timeout=10.0)
+    # Not yet BT-connected → deferred to reconnect loop, no connect/wait calls
+    mock_connect.assert_not_called()
+    mock_wait.assert_not_called()
 
 
 def test_pre_connect_persists_mac_for_wiimote():
@@ -595,6 +599,10 @@ def test_try_reconnect_bt_calls_reconnect_and_waits_for_evdev():
         patch("cursed_controls.runtime.wait_for_evdev") as mock_wait,
     ):
         runtime._try_reconnect_bt(profile)
+        # reconnect runs in a daemon thread — wait for it to finish
+        deadline = time.monotonic() + 2.0
+        while profile.id in runtime._reconnecting and time.monotonic() < deadline:
+            time.sleep(0.01)
 
     mock_reconnect.assert_called_once_with(
         "AA:BB:CC:DD:EE:FF", True, timeout=5.0, max_retries=3, backoff=1.0
@@ -603,7 +611,7 @@ def test_try_reconnect_bt_calls_reconnect_and_waits_for_evdev():
 
 
 def test_rescan_calls_reconnect_for_bt_profiles():
-    """_rescan_if_due triggers _try_reconnect_bt for BT/Wiimote pending profiles."""
+    """_rescan_thread_body triggers _try_reconnect_bt for BT/Wiimote pending profiles."""
     from unittest.mock import patch
 
     profile = DeviceProfile(
@@ -613,17 +621,22 @@ def test_rescan_calls_reconnect_for_bt_profiles():
     )
     config = AppConfig(runtime=RuntimeConfig(rescan_interval_ms=0), devices=[profile])
     runtime = Runtime(config, FakeSink())
-    runtime.selector = FakeSelector()
     runtime.pending_profiles = [profile]
     runtime._connected_macs["wiimote"] = "AA:BB:CC:DD:EE:FF"
 
-    with (
-        patch.object(runtime, "_try_reconnect_bt") as mock_reconnect,
-        patch.object(runtime, "_try_bind_pending"),
-    ):
-        runtime._rescan_if_due()
+    reconnect_calls = []
 
-    mock_reconnect.assert_called_once_with(profile)
+    def fake_reconnect(p):
+        reconnect_calls.append(p)
+        runtime._stop_event.set()  # stop after first reconnect call
+
+    with (
+        patch.object(runtime, "_try_reconnect_bt", side_effect=fake_reconnect),
+        patch("cursed_controls.runtime.list_devices", return_value=[]),
+    ):
+        runtime._rescan_thread_body()
+
+    assert reconnect_calls == [profile]
 
 
 import threading, time

@@ -59,13 +59,16 @@ def connect_wiimote(mac: str, timeout: float) -> bool:
     found = False
     try:
         proc = subprocess.Popen(
-            ["stdbuf", "-oL", "bluetoothctl", "scan", "on"],
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        if proc.stdout is None:
+        if proc.stdout is None or proc.stdin is None:
             return False
+        proc.stdin.write("scan on\n")
+        proc.stdin.flush()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             ready, _, _ = _select.select([proc.stdout], [], [], 1.0)
@@ -78,6 +81,8 @@ def connect_wiimote(mac: str, timeout: float) -> bool:
             if mac_norm in line.upper().replace(":", ""):
                 found = True
                 break
+        proc.stdin.write("scan off\n")
+        proc.stdin.flush()
         proc.terminate()
         proc.wait()
     except (OSError, FileNotFoundError):
@@ -86,9 +91,12 @@ def connect_wiimote(mac: str, timeout: float) -> bool:
     if not found:
         return False
 
-    # Device is now in the discovery cache — trust and connect without pairing
+    # Device is now in the discovery cache — trust, make discoverable, then connect.
+    # discoverable on lets the Wiimote see the host and initiate its own HID channels.
     _run_bluetoothctl("trust", mac, timeout=5.0)
+    _run_bluetoothctl("discoverable", "on", timeout=5.0)
     out = _run_bluetoothctl("connect", mac, timeout=12.0)
+    _run_bluetoothctl("discoverable", "off", timeout=5.0)
     return "Connection successful" in out
 
 
@@ -118,30 +126,37 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
 
     try:
         proc = subprocess.Popen(
-            # stdbuf -oL forces line-buffering on bluetoothctl's stdout
-            # so we see each device line as it arrives, not in 4KB blocks
-            ["stdbuf", "-oL", "bluetoothctl", "scan", "on"],
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        if proc.stdout is None:
+        if proc.stdout is None or proc.stdin is None:
             return None
+        proc.stdin.write("scan on\n")
+        proc.stdin.flush()
 
+        _strip = re.compile(r"[\x01\x02]|\x1b\[[0-9;]*m")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             ready, _, _ = select.select([proc.stdout], [], [], 1.0)
             if not ready:
                 continue
-            line = proc.stdout.readline()
-            if not line:
+            raw = proc.stdout.readline()
+            if not raw:
                 break
+            line = _strip.sub("", raw)
             m = re.search(r"Device ([0-9A-Fa-f:]{17}) Nintendo", line)
             if m:
+                proc.stdin.write("scan off\n")
+                proc.stdin.flush()
                 proc.terminate()
                 proc.wait()
                 return m.group(1)
 
+        proc.stdin.write("scan off\n")
+        proc.stdin.flush()
         proc.terminate()
         proc.wait()
     except (OSError, FileNotFoundError):

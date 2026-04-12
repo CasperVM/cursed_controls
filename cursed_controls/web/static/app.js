@@ -183,20 +183,20 @@ wsOn('bt_scan', (msg) => {
   if (msg.event === 'found') {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${escapeHtml(msg.mac)}</td><td>${escapeHtml(msg.name)}</td><td><button class="btn secondary btn-connect">Connect</button></td>`;
-    tr.querySelector('.btn-connect').addEventListener('click', () => btConnect(msg.mac));
+    tr.querySelector('.btn-connect').addEventListener('click', () => btConnect(msg.mac, msg.name));
     btTbody.appendChild(tr);
   } else if (msg.event === 'done') {
     btStatus.textContent = 'Scan complete.';
   }
 });
 
-async function btConnect(mac) {
+async function btConnect(mac, name = '') {
   btStatus.textContent = `Connecting ${mac}…`;
   try {
     await apiFetch('/api/bt/connect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mac }),
+      body: JSON.stringify({ mac, name }),
     });
     btStatus.textContent = `Connected ${mac}`;
     loadDevices();

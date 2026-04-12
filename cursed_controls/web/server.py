@@ -158,13 +158,6 @@ async def _stream_input(
         )
         return
 
-    grabbed = False
-    try:
-        dev.grab()
-        grabbed = True
-    except IOError:
-        pass
-
     # Build initial axis info from capabilities
     axes_info: dict[int, evdev.AbsInfo] = {}
     caps = dev.capabilities()
@@ -215,9 +208,4 @@ async def _stream_input(
     except (OSError, asyncio.CancelledError):
         pass
     finally:
-        if grabbed:
-            try:
-                dev.ungrab()
-            except Exception:
-                pass
         dev.close()

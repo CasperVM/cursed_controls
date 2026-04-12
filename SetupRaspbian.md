@@ -8,8 +8,14 @@ Run the install script — it handles everything automatically and is safe to re
 
 ```bash
 cd ~
-git clone https://github.com/Berghopper/cursed_controls.git
+git clone https://github.com/CasperVM/cursed_controls.git
 bash ~/cursed_controls/install.sh
+```
+
+Optional for a headless appliance install with faster boot and lower idle power:
+
+```bash
+bash ~/cursed_controls/install.sh --headless-fast-boot
 ```
 
 It will:
@@ -19,15 +25,16 @@ It will:
 4. Clone and build `raw-gadget`
 5. Install Rust and build the gadget shared library
 6. Set up the Python venv
-7. Register and enable the `cursed-controls` systemd service
+7. Seed `mapping.yaml` from `example_tv_remote.yaml` if it does not already exist
+8. Register and enable the `cursed-controls-web.service` systemd service
 
-Reboot if prompted, then continue to **Set up your mapping**.
+Reboot when it finishes, then plug the Pi into USB and open the web UI. The web service starts automatically on boot.
 
 ---
 
 ## Set up your mapping
 
-The service loads `~/cursed_controls/mapping.yaml` on boot. You need to create this file.
+The web service uses `~/cursed_controls/mapping.yaml`. On a fresh install, the installer creates it from `example_tv_remote.yaml` so the UI has a working starting point.
 
 ### Option A — copy an example
 
@@ -58,24 +65,16 @@ See the [config format](README.md#config-format) in the README, or use an exampl
 
 ---
 
-## Start the service
+## Web service
 
 ```bash
-sudo systemctl start cursed-controls
+sudo systemctl status cursed-controls-web.service
 
 # Watch logs live
-journalctl -u cursed-controls -f
+journalctl -u cursed-controls-web.service -f
 ```
 
-The service also starts automatically on every boot.
-
-To change which config is loaded without editing the service file:
-
-```bash
-echo 'CC_CONFIG=/home/casper/cursed_controls/example_rocket_league.yaml' \
-    | sudo tee /etc/cursed-controls.env
-sudo systemctl restart cursed-controls
-```
+The web UI starts automatically on every boot after install. Use the UI to edit the mapping config and start or stop the gadget runtime.
 
 ---
 
@@ -161,12 +160,15 @@ bash ~/cursed_controls/init-raspbian.sh
 
 ## Power saving (Pi Zero 2W headless)
 
-Add to `/boot/firmware/config.txt`:
+The installer can apply this for you with:
+
+```bash
+bash ~/cursed_controls/install.sh --headless-fast-boot
+```
+
+That writes these lines to the active boot config file:
 
 ```
-dtoverlay=dwc2
-dtoverlay=disable-bt=off
-dtoverlay=disable-wifi=off
 hdmi_blanking=1
 hdmi_ignore_hotplug=1
 camera_auto_detect=0
@@ -176,6 +178,8 @@ gpu_mem=16
 dtparam=act_led_trigger=none
 dtparam=act_led_activelow=on
 ```
+
+It does not disable Wi-Fi or Bluetooth.
 
 ---
 
