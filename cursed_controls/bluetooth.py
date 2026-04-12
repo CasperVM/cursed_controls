@@ -18,7 +18,7 @@ def _run_bluetoothctl(*args: str, timeout: float) -> str:
             timeout=timeout,
         )
         return result.stdout
-    except subprocess.TimeoutExpired:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         return ""
 
 

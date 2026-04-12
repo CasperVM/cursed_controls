@@ -483,6 +483,7 @@ def test_pre_connect_persists_mac_for_wiimote():
             "cursed_controls.runtime.scan_for_wiimote",
             return_value="AA:BB:CC:DD:EE:FF",
         ),
+        patch("cursed_controls.runtime.is_device_connected", return_value=False),
         patch("cursed_controls.runtime.connect_wiimote"),
         patch("cursed_controls.runtime.wait_for_evdev"),
         patch("cursed_controls.runtime.list_devices", return_value=[]),

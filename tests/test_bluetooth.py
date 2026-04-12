@@ -1,6 +1,7 @@
 """Tests for cursed_controls.bluetooth (no hardware required)."""
 
 from io import StringIO
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from cursed_controls.bluetooth import (
@@ -195,6 +196,14 @@ def test_is_device_connected_returns_false_on_empty_output():
     with patch(
         "cursed_controls.bluetooth.subprocess.run",
         return_value=_mock_run(""),
+    ):
+        assert is_device_connected("AA:BB:CC:DD:EE:FF") is False
+
+
+def test_is_device_connected_returns_false_when_bluetoothctl_missing():
+    with patch(
+        "cursed_controls.bluetooth.subprocess.run",
+        side_effect=FileNotFoundError("bluetoothctl"),
     ):
         assert is_device_connected("AA:BB:CC:DD:EE:FF") is False
 
