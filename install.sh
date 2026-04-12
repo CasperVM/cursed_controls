@@ -166,7 +166,8 @@ fi
 # on Pi Zero / Zero 2 W.
 if ! awk '/^\[cm[0-9]/{skip=1;next} /^\[/{skip=0} !skip && /^dtoverlay=dwc2$/{found=1;exit} END{exit !found}' "$BOOT_CONFIG" 2>/dev/null; then
     info "Enabling USB OTG overlay in $BOOT_CONFIG..."
-    ensure_boot_config_line "dtoverlay=dwc2"
+    echo "dtoverlay=dwc2" | sudo tee -a "$BOOT_CONFIG" >/dev/null
+    NEED_REBOOT=1
 fi
 BOOT_CMDLINE="/boot/firmware/cmdline.txt"
 [ -f "$BOOT_CMDLINE" ] || BOOT_CMDLINE="/boot/cmdline.txt"
