@@ -17,9 +17,7 @@ Tested on Raspberry Pi Zero W and Pi Zero 2W.
 
 > **Small disclaimer**: The hard part of initially making it work was done by hand. However, to finish this project and make it useful, this was partially vibe coded (yes I know, very bad. But finished is better than never seeing the light of day).
 
-## Demo of mapper UI
-
-Static demo: `https://caspervm.github.io/cursed_controls/`
+## [Demo](https://caspervm.github.io/cursed_controls/)
 
 This is a visual mock of the web UI for quick exploration. It does not connect to hardware, Bluetooth, APIs, or the live backend.
 
@@ -64,6 +62,16 @@ bash ~/cursed_controls/install.sh [--headless-fast-boot]
 
 The installer is safe to re-run — each step skips if already complete.
 
+### After install
+
+`http://<pi-ip>:8000`
+
+Open the web UI from another device on the same network at the above url.
+
+Example:
+
+`http://192.168.1.123:8000`
+
 `--headless-fast-boot` adds these settings to `config.txt`:
 
 ```text
@@ -79,7 +87,7 @@ dtparam=act_led_activelow=on
 
 It does not disable Wi-Fi or Bluetooth.
 
-## Running
+## Running CLI
 
 ```bash
 # List detected input devices
