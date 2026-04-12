@@ -19,7 +19,9 @@ Tested on Raspberry Pi Zero W and Pi Zero 2W.
 
 ## Demo of mapper UI
 
-(tbd)
+Static demo: `https://caspervm.github.io/cursed_controls/`
+
+This is a visual mock of the web UI for quick exploration. It does not connect to hardware, Bluetooth, APIs, or the live backend.
 
 ## How it works
 

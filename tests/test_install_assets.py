@@ -41,6 +41,24 @@ def test_setup_doc_mentions_web_service():
     assert "cursed-controls-web.service" in setup
 
 
+def test_docs_demo_files_exist():
+    for rel in ("docs/index.html", "docs/style.css", "docs/app.js"):
+        assert (REPO_ROOT / rel).exists()
+
+
+def test_docs_demo_is_static():
+    html = (REPO_ROOT / "docs/index.html").read_text()
+    js = (REPO_ROOT / "docs/app.js").read_text()
+    assert "Demo only" in html
+    assert "/api/" not in js
+    assert "new WebSocket" not in js
+
+
+def test_readme_mentions_demo():
+    readme = (REPO_ROOT / "README.md").read_text()
+    assert "demo" in readme.lower()
+
+
 def test_install_script_supports_headless_fast_boot_flag():
     install = (REPO_ROOT / "install.sh").read_text()
     assert "--headless-fast-boot" in install

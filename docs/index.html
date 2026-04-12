@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cursed-controls</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+  <div id="app">
+    <header>
+      <h1>cursed-controls</h1>
+      <nav>
+        <button class="active" data-tab="devices">Devices</button>
+        <button data-tab="mapping">Mapping</button>
+        <button data-tab="config">Config</button>
+      </nav>
+      <div class="header-actions">
+        <a href="https://github.com/CasperVM/cursed_controls" target="_blank" rel="noopener"
+          class="btn secondary">GitHub ↗</a>
+        <span class="badge pending">demo mock</span>
+        <button id="btn-theme" class="btn secondary" title="Toggle theme"></button>
+      </div>
+    </header>
+
+    <div id="demo-banner">
+      <strong>Demo only.</strong> This is the UI layout with static sample data. It does not connect to any hardware,
+      Bluetooth, APIs, or WebSockets.
+    </div>
+
+    <main>
+      <!-- ── Devices tab ── -->
+      <div id="tab-devices" class="tab-content active">
+        <div class="card">
+          <h2>Input Devices</h2>
+          <button class="btn secondary" id="btn-refresh-devices">Refresh</button>
+          <table id="devices-table" style="margin-top:.75rem">
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Name</th>
+                <th>Composite</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="devices-tbody"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Bluetooth</h2>
+          <div class="row" style="align-items:center">
+            <h3 style="margin:0">Paired Devices</h3>
+            <button class="btn secondary" id="btn-refresh-paired" style="margin-left:auto">Refresh</button>
+          </div>
+          <table id="paired-table" style="margin-top:.5rem">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>MAC</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="paired-tbody">
+              <tr>
+                <td colspan="4" class="dim">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+          <hr style="margin:1rem 0;border:none;border-top:1px solid var(--border)">
+          <div class="row">
+            <button class="btn" id="btn-bt-scan">Scan</button>
+            <span class="dim" id="bt-scan-status"></span>
+          </div>
+          <table id="bt-table" style="margin-top:.75rem;display:none">
+            <thead>
+              <tr>
+                <th>MAC</th>
+                <th>Name</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="bt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Mapping tab ── -->
+      <div id="tab-mapping" class="tab-content">
+        <div class="split">
+          <div class="panel">
+            <div class="card">
+              <h2>Profiles</h2>
+              <button class="btn secondary" id="btn-add-profile" style="margin-bottom:.5rem">+ Add Profile</button>
+              <ul id="profile-list" style="list-style:none;padding:0"></ul>
+            </div>
+          </div>
+          <div class="panel" id="profile-detail">
+            <div class="card" id="no-profile-msg">
+              <p class="dim">Select a profile to edit its mappings.</p>
+            </div>
+            <div id="profile-editor" style="display:none">
+              <div class="card">
+                <h2 id="profile-editor-title">Profile</h2>
+                <div class="field">
+                  <label>Profile ID</label>
+                  <input type="text" id="profile-id-input">
+                </div>
+                <div class="field">
+                  <label>Device</label>
+                  <div class="row" style="gap:.5rem;align-items:center">
+                    <button class="btn secondary" id="btn-pick-device" type="button">Pick Device…</button>
+                    <span id="picked-device-label" class="dim" style="font-size:.85rem"></span>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="field" style="flex:1">
+                    <label>Match by</label>
+                    <select id="profile-match-key">
+                      <option value="name">name</option>
+                      <option value="uniq">uniq</option>
+                      <option value="phys">phys</option>
+                    </select>
+                  </div>
+                  <div class="field" style="flex:2">
+                    <label>Match value</label>
+                    <input type="text" id="profile-match-val">
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Connection type</label>
+                  <select id="profile-conn-type">
+                    <option value="evdev">evdev</option>
+                    <option value="bluetooth">bluetooth</option>
+                    <option value="wiimote">wiimote</option>
+                  </select>
+                </div>
+                <div id="profile-mac-field" class="field" style="display:none">
+                  <label>MAC address</label>
+                  <input type="text" id="profile-mac">
+                </div>
+                <div class="row">
+                  <div class="field" style="flex:1">
+                    <label>Output slot</label>
+                    <select id="profile-slot">
+                      <option value="0">Slot 1</option>
+                      <option value="1">Slot 2</option>
+                      <option value="2">Slot 3</option>
+                      <option value="3">Slot 4</option>
+                    </select>
+                  </div>
+                  <div class="field" style="flex:1">
+                    <label>Rumble</label>
+                    <select id="profile-rumble">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="row mt">
+                  <button class="btn secondary" id="btn-open-presets">Presets…</button>
+                  <button class="btn" id="btn-save-profile">Save Profile</button>
+                  <button class="btn danger" id="btn-delete-profile">Delete Profile</button>
+                </div>
+              </div>
+
+              <!-- Device picker modal -->
+              <div id="device-picker"
+                style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+                <div
+                  style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;min-width:340px;max-width:520px;max-height:80vh;display:flex;flex-direction:column;gap:.75rem">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <strong>Pick a device</strong>
+                    <button class="btn secondary" id="btn-picker-close">✕</button>
+                  </div>
+                  <div id="picker-list" style="overflow-y:auto;display:flex;flex-direction:column;gap:.4rem"></div>
+                </div>
+              </div>
+              <div class="card">
+                <h2>Mappings</h2>
+                <button class="btn secondary" id="btn-add-mapping">+ Add Mapping</button>
+                <table style="margin-top:.75rem">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Kind</th>
+                      <th>Target (Xbox)</th>
+                      <th>Transform</th>
+                      <th>Live</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="mappings-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Config tab ── -->
+      <div id="tab-config" class="tab-content">
+        <div class="card">
+          <h2>Runtime Settings</h2>
+          <div class="row">
+            <div class="field" style="flex:1"
+              data-tip="stdout prints controller packets to the terminal (debug). gadget drives the USB Xbox 360 receiver hardware.">
+              <label>Output mode</label>
+              <select id="cfg-output-mode">
+                <option value="stdout">stdout (debug)</option>
+                <option value="gadget">gadget (hardware)</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="Number of simultaneous Xbox 360 controller slots on the USB gadget. Should match the number of device profiles you intend to run.">
+              <label>Interfaces (slots)</label>
+              <input type="number" id="cfg-interfaces" value="1" min="1" max="4">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="How often the event loop checks for new input events. Lower = more responsive but higher CPU usage. Default: 1 ms.">
+              <label>Poll interval (ms)</label>
+              <input type="number" id="cfg-poll-interval" value="1" min="1">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="How often the background thread retries profiles that haven't found their device yet, e.g. waiting for a BT controller to appear. Default: 2000 ms.">
+              <label>Rescan interval (ms)</label>
+              <input type="number" id="cfg-rescan" value="2000" min="100">
+            </div>
+          </div>
+          <div class="field"
+            data-tip="Whether to read rumble commands from the USB host and forward them to the physical controllers via EV_FF.">
+            <label>Rumble forwarding</label>
+            <select id="cfg-rumble">
+              <option value="true">enabled</option>
+              <option value="false">disabled</option>
+            </select>
+          </div>
+          <h3 style="margin:.75rem 0 .4rem">Rumble Tuning</h3>
+          <div class="row">
+            <div class="field" style="flex:1"
+              data-tip="Stop motors if no rumble packet arrives for this long. Safety fallback in case the host stops sending. Default: 0.5 s.">
+              <label>Timeout (s)</label>
+              <input type="number" id="cfg-rumble-timeout" value="0.5" step="0.1" min="0">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="Re-send EV_FF play every N seconds while rumbling. Nintendo controllers stop after ~100 ms without a refresh. Default: 0.05 s.">
+              <label>Heartbeat (s)</label>
+              <input type="number" id="cfg-rumble-heartbeat" value="0.05" step="0.01" min="0">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="Delay before honouring a (0,0) stop packet. xpad wireless auto-sends (0,0) ~300 ms after every ON packet — debouncing lets a follow-up ON cancel the stop. Default: 0.4 s.">
+              <label>Stop debounce (s)</label>
+              <input type="number" id="cfg-rumble-debounce" value="0.4" step="0.1" min="0">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="Number of non-zero rumble packets required within the activate window before motors start. Blocks isolated xpad keepalive retransmissions (5 s apart). Default: 2.">
+              <label>Activate count</label>
+              <input type="number" id="cfg-rumble-activate-count" value="2" min="1">
+            </div>
+            <div class="field" style="flex:1"
+              data-tip="Time window for counting activation packets. Game rumble arrives every ~16 ms (easily passes). xpad keepalives are 5 s apart (blocked). Default: 4.0 s.">
+              <label>Activate window (s)</label>
+              <input type="number" id="cfg-rumble-activate-window" value="4.0" step="0.5" min="0">
+            </div>
+          </div>
+          <button class="btn mt" id="btn-save-runtime">Save Runtime Settings</button>
+        </div>
+        <div class="card">
+          <h2>Import / Export</h2>
+          <div class="row">
+            <button class="btn" id="btn-export">Download YAML</button>
+            <label class="btn secondary" style="cursor:pointer">
+              Import YAML/JSON
+              <input type="file" id="import-file" accept=".yaml,.yml,.json" style="display:none">
+            </label>
+          </div>
+          <p class="dim mt" id="import-status"></p>
+        </div>
+        <div class="card danger-zone">
+          <h2>Danger Zone</h2>
+          <div class="row">
+            <button class="btn" id="btn-restart-service">Restart Service</button>
+            <button class="btn danger" id="btn-clear-config">Clear Config</button>
+          </div>
+          <details style="margin-top:1rem">
+            <summary>Advanced driver settings</summary>
+            <div style="padding-top:.75rem">
+              <div class="field"
+                data-tip="Path to libx360_w_raw_gadget.so — the native library that drives the USB Xbox 360 gadget via raw-gadget. Only change this if you built the library in a non-default location.">
+                <label>Gadget library path</label>
+                <input type="text" id="cfg-gadget-library" style="font-family:monospace;font-size:.85rem">
+              </div>
+              <div class="row">
+                <div class="field" style="flex:1"
+                  data-tip="UDC (USB Device Controller) driver name, e.g. fe980000.usb. Leave blank to auto-detect from /sys/class/udc/.">
+                  <label>Gadget driver</label>
+                  <input type="text" id="cfg-gadget-driver" placeholder="auto-detect">
+                </div>
+                <div class="field" style="flex:1"
+                  data-tip="USB gadget device name passed to raw-gadget. Defaults to the driver name if left blank.">
+                  <label>Gadget device</label>
+                  <input type="text" id="cfg-gadget-device" placeholder="same as driver">
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </main>
+
+    <div id="status-bar">
+      <span id="ws-status" class="dim">demo: static preview</span>
+      <span class="spacer"></span>
+      <div class="status-dot running" id="runtime-dot"></div>
+      <span id="runtime-label">running</span>
+    </div>
+  </div>
+
+  <!-- Mapping wizard overlay -->
+  <div id="wizard-overlay">
+    <div id="wizard-box">
+      <h3 id="wizard-title">Add Mapping</h3>
+      <div id="wizard-content"></div>
+      <div class="row mt">
+        <button class="btn secondary" id="wizard-cancel">Cancel</button>
+        <span class="spacer"></span>
+        <button class="btn" id="wizard-confirm" style="display:none">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="splash" aria-hidden="true">
+    <div id="splash-logo">
+      <div class="splash-pixel-row">
+        <div class="spr" style="--c:2;--r:0"></div>
+        <div class="spr" style="--c:3;--r:0"></div>
+        <div class="spr" style="--c:6;--r:0"></div>
+        <div class="spr" style="--c:7;--r:0"></div>
+        <div class="spr" style="--c:1;--r:1"></div>
+        <div class="spr" style="--c:2;--r:1"></div>
+        <div class="spr" style="--c:3;--r:1"></div>
+        <div class="spr" style="--c:4;--r:1"></div>
+        <div class="spr" style="--c:5;--r:1"></div>
+        <div class="spr" style="--c:6;--r:1"></div>
+        <div class="spr" style="--c:7;--r:1"></div>
+        <div class="spr" style="--c:8;--r:1"></div>
+        <div class="spr" style="--c:0;--r:2"></div>
+        <div class="spr" style="--c:1;--r:2"></div>
+        <div class="spr" style="--c:4;--r:2"></div>
+        <div class="spr" style="--c:5;--r:2"></div>
+        <div class="spr" style="--c:8;--r:2"></div>
+        <div class="spr" style="--c:9;--r:2"></div>
+        <div class="spr" style="--c:0;--r:3"></div>
+        <div class="spr" style="--c:1;--r:3"></div>
+        <div class="spr" style="--c:4;--r:3"></div>
+        <div class="spr" style="--c:5;--r:3"></div>
+        <div class="spr" style="--c:8;--r:3"></div>
+        <div class="spr" style="--c:9;--r:3"></div>
+        <div class="spr" style="--c:1;--r:4"></div>
+        <div class="spr" style="--c:2;--r:4"></div>
+        <div class="spr" style="--c:3;--r:4"></div>
+        <div class="spr" style="--c:4;--r:4"></div>
+        <div class="spr" style="--c:5;--r:4"></div>
+        <div class="spr" style="--c:6;--r:4"></div>
+        <div class="spr" style="--c:7;--r:4"></div>
+        <div class="spr" style="--c:8;--r:4"></div>
+        <div class="spr" style="--c:2;--r:5"></div>
+        <div class="spr" style="--c:3;--r:5"></div>
+        <div class="spr" style="--c:6;--r:5"></div>
+        <div class="spr" style="--c:7;--r:5"></div>
+      </div>
+      <div class="splash-title">cursed-controls</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Preset overlay -->
+  <div id="preset-overlay">
+    <div id="preset-box">
+      <div class="row" style="align-items:center;margin-bottom:.75rem">
+        <strong>Presets</strong>
+        <button class="btn secondary" id="preset-close" style="margin-left:auto;padding:0 .5rem">✕</button>
+      </div>
+      <input type="text" id="preset-search" placeholder="Search presets…" autocomplete="off"
+        style="margin-bottom:.5rem">
+      <label class="preset-filter-toggle" id="preset-filter-label" style="display:none">
+        <input type="checkbox" id="preset-show-all"> Show presets for other devices
+      </label>
+      <div id="preset-list"></div>
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)">
+        <p class="dim" style="margin-bottom:.4rem">Save current mappings as preset:</p>
+        <div class="row">
+          <input type="text" id="preset-name-input" placeholder="Preset name…" style="flex:1">
+          <button class="btn" id="preset-save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="./app.js"></script>
+</body>
+
+</html>
