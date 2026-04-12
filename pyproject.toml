@@ -8,6 +8,7 @@ dependencies = [
     "evdev>=1.9.2",
     "pyyaml>=6.0.3",
     "fastapi>=0.110",
+    "pydantic==2.12.3",
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",
 ]

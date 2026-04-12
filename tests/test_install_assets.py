@@ -132,6 +132,14 @@ def test_base_dependencies_do_not_require_uvicorn_standard_extras():
     assert 'uvicorn>=' in pyproject
 
 
+def test_lockfile_pins_armv6_wheel_backed_pydantic_core():
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+    lock = (REPO_ROOT / "uv.lock").read_text()
+    assert 'pydantic==2.12.3' in pyproject
+    assert 'name = "pydantic-core"' in lock
+    assert 'version = "2.41.4"' in lock
+
+
 def test_install_script_uses_repo_python_version_for_uv():
     install = (REPO_ROOT / "install.sh").read_text()
     assert ".python-version" in install
