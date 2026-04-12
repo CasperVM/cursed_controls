@@ -119,6 +119,12 @@ def test_install_script_installs_python_dev_headers():
     assert "python3-dev" in install
 
 
+def test_base_dependencies_do_not_require_uvicorn_standard_extras():
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+    assert 'uvicorn[standard]' not in pyproject
+    assert 'uvicorn>=' in pyproject
+
+
 def test_install_script_uses_repo_python_version_for_uv():
     install = (REPO_ROOT / "install.sh").read_text()
     assert ".python-version" in install
