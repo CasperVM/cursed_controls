@@ -160,9 +160,20 @@ if grep -qxF "dtoverlay=dwc2,dr_mode=host" "$BOOT_CONFIG" 2>/dev/null; then
     sudo sed -i 's/^dtoverlay=dwc2,dr_mode=host$/dtoverlay=dwc2/' "$BOOT_CONFIG"
     NEED_REBOOT=1
 fi
-if ! grep -qxF "dtoverlay=dwc2" "$BOOT_CONFIG"; then
+# Check that dtoverlay=dwc2 exists OUTSIDE CM-specific conditional blocks.
+# The default Pi OS image ships dtoverlay=dwc2 inside [cm5]; a naive grep
+# would match it there and skip adding it to [all], leaving it ineffective
+# on Pi Zero / Zero 2 W.
+if ! awk '/^\[cm[0-9]/{skip=1;next} /^\[/{skip=0} !skip && /^dtoverlay=dwc2$/{found=1;exit} END{exit !found}' "$BOOT_CONFIG" 2>/dev/null; then
     info "Enabling USB OTG overlay in $BOOT_CONFIG..."
     ensure_boot_config_line "dtoverlay=dwc2"
+fi
+BOOT_CMDLINE="/boot/firmware/cmdline.txt"
+[ -f "$BOOT_CMDLINE" ] || BOOT_CMDLINE="/boot/cmdline.txt"
+if [ -f "$BOOT_CMDLINE" ] && ! grep -q "modules-load=.*dwc2" "$BOOT_CMDLINE"; then
+    info "Adding modules-load=dwc2,libcomposite to $BOOT_CMDLINE..."
+    sudo sed -i 's/$/ modules-load=dwc2,libcomposite/' "$BOOT_CMDLINE"
+    NEED_REBOOT=1
 fi
 if ! grep -q "^dwc2$" /etc/modules; then
     echo "dwc2" | sudo tee -a /etc/modules >/dev/null
