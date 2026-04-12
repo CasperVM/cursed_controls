@@ -70,6 +70,13 @@ def test_install_script_supports_headless_fast_boot_flag():
     assert "--headless-fast-boot" in install
 
 
+def test_install_script_repairs_host_mode_dwc2_overlay():
+    install = (REPO_ROOT / "install.sh").read_text()
+    assert "dtoverlay=dwc2,dr_mode=host" in install
+    assert "dtoverlay=dwc2" in install
+    assert "sed -i" in install
+
+
 def test_install_script_lists_headless_fast_boot_settings():
     install = (REPO_ROOT / "install.sh").read_text()
     for line in (

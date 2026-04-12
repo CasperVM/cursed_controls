@@ -155,6 +155,11 @@ ok "udev rules"
 BOOT_CONFIG="/boot/firmware/config.txt"
 [ -f "$BOOT_CONFIG" ] || BOOT_CONFIG="/boot/config.txt"
 
+if grep -qxF "dtoverlay=dwc2,dr_mode=host" "$BOOT_CONFIG" 2>/dev/null; then
+    info "Switching USB overlay from host mode to gadget mode in $BOOT_CONFIG..."
+    sudo sed -i 's/^dtoverlay=dwc2,dr_mode=host$/dtoverlay=dwc2/' "$BOOT_CONFIG"
+    NEED_REBOOT=1
+fi
 if ! grep -qxF "dtoverlay=dwc2" "$BOOT_CONFIG"; then
     info "Enabling USB OTG overlay in $BOOT_CONFIG..."
     ensure_boot_config_line "dtoverlay=dwc2"
