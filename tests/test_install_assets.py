@@ -137,6 +137,17 @@ def test_base_dependencies_do_not_require_uvicorn_standard_extras():
     assert 'uvicorn>=' in pyproject
 
 
+def test_uv_sources_pin_armv6_packages_to_piwheels():
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+    assert '[[tool.uv.index]]' in pyproject
+    assert 'name = "piwheels"' in pyproject
+    assert 'url = "https://www.piwheels.org/simple"' in pyproject
+    assert 'explicit = true' in pyproject
+    assert 'evdev = { index = "piwheels", marker = "platform_machine == \'armv6l\'" }' in pyproject
+    assert 'pyyaml = { index = "piwheels", marker = "platform_machine == \'armv6l\'" }' in pyproject
+    assert 'pydantic-core = { index = "piwheels", marker = "platform_machine == \'armv6l\'" }' in pyproject
+
+
 def test_lockfile_pins_armv6_wheel_backed_pydantic_core():
     pyproject = (REPO_ROOT / "pyproject.toml").read_text()
     lock = (REPO_ROOT / "uv.lock").read_text()

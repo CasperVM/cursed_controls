@@ -1,6 +1,10 @@
 version = 1
 revision = 3
 requires-python = ">=3.11"
+resolution-markers = [
+    "platform_machine == 'armv6l'",
+    "platform_machine != 'armv6l'",
+]
 
 [[package]]
 name = "annotated-doc"
@@ -68,11 +72,15 @@ name = "cursed-controls"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "evdev" },
+    { name = "evdev", version = "1.9.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'armv6l'" },
+    { name = "evdev", version = "1.9.3", source = { registry = "https://www.piwheels.org/simple" }, marker = "platform_machine == 'armv6l'" },
     { name = "fastapi" },
     { name = "pydantic" },
+    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'armv6l'" },
+    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://www.piwheels.org/simple" }, marker = "platform_machine == 'armv6l'" },
     { name = "python-multipart" },
-    { name = "pyyaml" },
+    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'armv6l'" },
+    { name = "pyyaml", version = "6.0.3", source = { registry = "https://www.piwheels.org/simple" }, marker = "platform_machine == 'armv6l'" },
     { name = "uvicorn" },
 ]
 
@@ -84,11 +92,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "evdev", specifier = ">=1.9.2" },
+    { name = "evdev", marker = "platform_machine != 'armv6l'", specifier = ">=1.9.2" },
+    { name = "evdev", marker = "platform_machine == 'armv6l'", specifier = ">=1.9.2", index = "https://www.piwheels.org/simple" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "pydantic", specifier = "==2.12.3" },
+    { name = "pydantic-core", marker = "platform_machine != 'armv6l'", specifier = "==2.41.4" },
+    { name = "pydantic-core", marker = "platform_machine == 'armv6l'", specifier = "==2.41.4", index = "https://www.piwheels.org/simple" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "pyyaml", marker = "platform_machine != 'armv6l'", specifier = ">=6.0.3" },
+    { name = "pyyaml", marker = "platform_machine == 'armv6l'", specifier = ">=6.0.3", index = "https://www.piwheels.org/simple" },
     { name = "uvicorn", specifier = ">=0.29" },
 ]
 
@@ -102,7 +114,24 @@ dev = [
 name = "evdev"
 version = "1.9.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine != 'armv6l'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/63/fe/a17c106a1f4061ce83f04d14bcedcfb2c38c7793ea56bfb906a6fadae8cb/evdev-1.9.2.tar.gz", hash = "sha256:5d3278892ce1f92a74d6bf888cc8525d9f68af85dbe336c95d1c87fb8f423069", size = 33301, upload-time = "2025-05-01T19:53:47.69Z" }
+
+[[package]]
+name = "evdev"
+version = "1.9.3"
+source = { registry = "https://www.piwheels.org/simple" }
+resolution-markers = [
+    "platform_machine == 'armv6l'",
+]
+wheels = [
+    { url = "https://www.piwheels.org/simple/evdev/evdev-1.9.3-cp311-cp311-linux_armv6l.whl", hash = "sha256:d5291947c09f2340630823a84f310ef9aa5e8e835b5e545a0a4ee213d5981044" },
+    { url = "https://www.piwheels.org/simple/evdev/evdev-1.9.3-cp311-cp311-linux_armv7l.whl", hash = "sha256:d5291947c09f2340630823a84f310ef9aa5e8e835b5e545a0a4ee213d5981044" },
+    { url = "https://www.piwheels.org/simple/evdev/evdev-1.9.3-cp313-cp313-linux_armv6l.whl", hash = "sha256:dab9b8150af68982c6c08e009b263c5c2eb5a0390660a240202fdb2742b0c73e" },
+    { url = "https://www.piwheels.org/simple/evdev/evdev-1.9.3-cp313-cp313-linux_armv7l.whl", hash = "sha256:dab9b8150af68982c6c08e009b263c5c2eb5a0390660a240202fdb2742b0c73e" },
+]
 
 [[package]]
 name = "fastapi"
@@ -199,7 +228,8 @@ version = "2.12.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
-    { name = "pydantic-core" },
+    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'armv6l'" },
+    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://www.piwheels.org/simple" }, marker = "platform_machine == 'armv6l'" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
@@ -212,8 +242,11 @@ wheels = [
 name = "pydantic-core"
 version = "2.41.4"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine != 'armv6l'",
+]
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "platform_machine != 'armv6l'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/df/18/d0944e8eaaa3efd0a91b0f1fc537d3be55ad35091b6a87638211ba691964/pydantic_core-2.41.4.tar.gz", hash = "sha256:70e47929a9d4a1905a67e4b687d5946026390568a8e952b92824118063cee4d5", size = 457557, upload-time = "2025-10-14T10:23:47.909Z" }
 wheels = [
@@ -302,6 +335,23 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-core"
+version = "2.41.4"
+source = { registry = "https://www.piwheels.org/simple" }
+resolution-markers = [
+    "platform_machine == 'armv6l'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "platform_machine == 'armv6l'" },
+]
+wheels = [
+    { url = "https://www.piwheels.org/simple/pydantic-core/pydantic_core-2.41.4-cp311-cp311-linux_armv6l.whl", hash = "sha256:2e46a78aa887a7b42bd2dd6de66499f6ef6aa00e5839a17082897a052f711608" },
+    { url = "https://www.piwheels.org/simple/pydantic-core/pydantic_core-2.41.4-cp311-cp311-linux_armv7l.whl", hash = "sha256:2e46a78aa887a7b42bd2dd6de66499f6ef6aa00e5839a17082897a052f711608" },
+    { url = "https://www.piwheels.org/simple/pydantic-core/pydantic_core-2.41.4-cp313-cp313-linux_armv6l.whl", hash = "sha256:610469863e7977f9380d2b3913927ad13be86f54fbae7442bd7dce47191a201c" },
+    { url = "https://www.piwheels.org/simple/pydantic-core/pydantic_core-2.41.4-cp313-cp313-linux_armv7l.whl", hash = "sha256:610469863e7977f9380d2b3913927ad13be86f54fbae7442bd7dce47191a201c" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -339,6 +389,9 @@ wheels = [
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine != 'armv6l'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/05/8e/961c0007c59b8dd7729d542c61a4d537767a59645b82a0b521206e1e25c2/pyyaml-6.0.3.tar.gz", hash = "sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f", size = 130960, upload-time = "2025-09-25T21:33:16.546Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/16/a95b6757765b7b031c9374925bb718d55e0a9ba8a1b6a12d25962ea44347/pyyaml-6.0.3-cp311-cp311-macosx_10_13_x86_64.whl", hash = "sha256:44edc647873928551a01e7a563d7452ccdebee747728c1080d881d68af7b997e", size = 185826, upload-time = "2025-09-25T21:31:58.655Z" },
@@ -388,6 +441,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
+]
+
+[[package]]
+name = "pyyaml"
+version = "6.0.3"
+source = { registry = "https://www.piwheels.org/simple" }
+resolution-markers = [
+    "platform_machine == 'armv6l'",
+]
+wheels = [
+    { url = "https://www.piwheels.org/simple/pyyaml/pyyaml-6.0.3-cp311-cp311-linux_armv6l.whl", hash = "sha256:96a9c0d2b473b1e98e6a3896d2c006a194d7d1992d0cf1db4f45beb413cb7494" },
+    { url = "https://www.piwheels.org/simple/pyyaml/pyyaml-6.0.3-cp311-cp311-linux_armv7l.whl", hash = "sha256:96a9c0d2b473b1e98e6a3896d2c006a194d7d1992d0cf1db4f45beb413cb7494" },
+    { url = "https://www.piwheels.org/simple/pyyaml/pyyaml-6.0.3-cp313-cp313-linux_armv6l.whl", hash = "sha256:9a459cfba03e7ce1a708172de8764f8e581096ad21af84ec92c03507b328ca3c" },
+    { url = "https://www.piwheels.org/simple/pyyaml/pyyaml-6.0.3-cp313-cp313-linux_armv7l.whl", hash = "sha256:9a459cfba03e7ce1a708172de8764f8e581096ad21af84ec92c03507b328ca3c" },
 ]
 
 [[package]]
