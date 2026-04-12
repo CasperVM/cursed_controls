@@ -12,6 +12,17 @@ from cursed_controls.web.deps import get_runtime_manager, get_state
 router = APIRouter()
 
 
+def _parse_bluetooth_devices(output: str) -> dict[str, str]:
+    import re
+
+    devices: dict[str, str] = {}
+    for line in output.splitlines():
+        m = re.match(r"Device ([0-9A-Fa-f:]{17})\s+(.*)", line)
+        if m:
+            devices[m.group(1)] = m.group(2).strip()
+    return devices
+
+
 class ConnectRequest(BaseModel):
     mac: str
     name: str = ""
@@ -57,10 +68,7 @@ def _do_scan(state: AppState) -> None:
     known: dict[str, str] = {}  # mac -> name
     try:
         out = subprocess.check_output(["bluetoothctl", "devices"], text=True)
-        for line in out.splitlines():
-            m = re.match(r"Device ([0-9A-Fa-f:]{17})\s+(.*)", line)
-            if m:
-                known[m.group(1)] = m.group(2).strip()
+        known = _parse_bluetooth_devices(out)
     except (OSError, subprocess.CalledProcessError):
         pass
 
@@ -84,10 +92,38 @@ def _do_scan(state: AppState) -> None:
         while time.monotonic() < deadline:
             ready, _, _ = select.select([proc.stdout], [], [], 1.0)
             if not ready:
+                try:
+                    current = _parse_bluetooth_devices(
+                        subprocess.check_output(["bluetoothctl", "devices"], text=True)
+                    )
+                except (OSError, subprocess.CalledProcessError):
+                    current = {}
+                for mac, name in current.items():
+                    if mac not in seen and known.get(mac) != name:
+                        seen.add(mac)
+                        known[mac] = name
+                        state.broadcast(
+                            {"type": "bt_scan", "event": "found", "mac": mac, "name": name}
+                        )
+                known.update(current)
                 continue
             raw = proc.stdout.readline()
             if not raw:
-                break
+                try:
+                    current = _parse_bluetooth_devices(
+                        subprocess.check_output(["bluetoothctl", "devices"], text=True)
+                    )
+                except (OSError, subprocess.CalledProcessError):
+                    current = {}
+                for mac, name in current.items():
+                    if mac not in seen and known.get(mac) != name:
+                        seen.add(mac)
+                        known[mac] = name
+                        state.broadcast(
+                            {"type": "bt_scan", "event": "found", "mac": mac, "name": name}
+                        )
+                known.update(current)
+                continue
             line = _strip.sub("", raw)
             # Newly discovered device (name appears inline)
             m = re.search(r"\[NEW\] Device ([0-9A-Fa-f:]{17})\s+(.+)", line)

@@ -22,6 +22,15 @@ def _run_bluetoothctl(*args: str, timeout: float) -> str:
         return ""
 
 
+def _parse_bluetooth_devices(output: str) -> dict[str, str]:
+    devices: dict[str, str] = {}
+    for line in output.splitlines():
+        m = re.match(r"Device ([0-9A-Fa-f:]{17})\s+(.*)", line)
+        if m:
+            devices[m.group(1)] = m.group(2).strip()
+    return devices
+
+
 def connect_device(mac: str, timeout: float) -> bool:
     """Pair, trust, and connect a standard Bluetooth device by MAC.
 
@@ -114,12 +123,11 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
     # Check already-known devices first. bluetoothctl only emits the full name
     # on [NEW] lines; re-seen devices only produce [CHG] RSSI lines with no name,
     # so a previously-discovered Wiimote would never match the scan regex below.
-    out = _run_bluetoothctl("devices", timeout=5.0)
-    for line in out.splitlines():
-        m = re.search(r"Device ([0-9A-Fa-f:]{17}) Nintendo", line)
-        if m:
-            print(f"Found known Wiimote: {m.group(1)}")
-            return m.group(1)
+    known = _parse_bluetooth_devices(_run_bluetoothctl("devices", timeout=5.0))
+    for mac, name in known.items():
+        if name.startswith("Nintendo"):
+            print(f"Found known Wiimote: {mac}")
+            return mac
 
     # Put adapter in pairable mode so the Wiimote can be accepted
     _run_bluetoothctl("pairable", "on", timeout=5.0)
@@ -142,10 +150,26 @@ def scan_for_wiimote(timeout: float, known_mac: str | None = None) -> str | None
         while time.monotonic() < deadline:
             ready, _, _ = select.select([proc.stdout], [], [], 1.0)
             if not ready:
+                known = _parse_bluetooth_devices(_run_bluetoothctl("devices", timeout=5.0))
+                for mac, name in known.items():
+                    if name.startswith("Nintendo"):
+                        proc.stdin.write("scan off\n")
+                        proc.stdin.flush()
+                        proc.terminate()
+                        proc.wait()
+                        return mac
                 continue
             raw = proc.stdout.readline()
             if not raw:
-                break
+                known = _parse_bluetooth_devices(_run_bluetoothctl("devices", timeout=5.0))
+                for mac, name in known.items():
+                    if name.startswith("Nintendo"):
+                        proc.stdin.write("scan off\n")
+                        proc.stdin.flush()
+                        proc.terminate()
+                        proc.wait()
+                        return mac
+                continue
             line = _strip.sub("", raw)
             m = re.search(r"Device ([0-9A-Fa-f:]{17}) Nintendo", line)
             if m:

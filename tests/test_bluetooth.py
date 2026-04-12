@@ -153,6 +153,38 @@ def test_scan_for_wiimote_returns_none_when_no_nintendo_found():
     assert result is None
 
 
+def test_scan_for_wiimote_polls_known_devices_when_scan_output_is_quiet():
+    mock_proc = MagicMock()
+    mock_proc.stdout.readline = lambda: ""
+    mock_proc.wait = MagicMock()
+    mock_proc.terminate = MagicMock()
+
+    responses = [
+        _mock_run(""),
+        _mock_run(""),
+        _mock_run("Device 11:22:33:44:55:66 Nintendo RVL-CNT-01\n"),
+    ]
+
+    def fake_run(*args, **kwargs):
+        return responses.pop(0) if responses else _mock_run("")
+
+    with (
+        patch("cursed_controls.bluetooth.subprocess.run", side_effect=fake_run),
+        patch("cursed_controls.bluetooth.subprocess.Popen", return_value=mock_proc),
+        patch(
+            "cursed_controls.bluetooth.select.select",
+            return_value=([], [], []),
+        ),
+        patch(
+            "cursed_controls.bluetooth.time.monotonic",
+            side_effect=[0.0, 0.0, 0.4, 0.4, 0.8, 0.8, 2.0],
+        ),
+    ):
+        result = scan_for_wiimote(timeout=1.5)
+
+    assert result == "11:22:33:44:55:66"
+
+
 # ---------------------------------------------------------------------------
 # wait_for_evdev
 # ---------------------------------------------------------------------------
