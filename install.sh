@@ -253,7 +253,8 @@ if [ "$ARCH" = "armv6l" ]; then
         --index-url https://www.piwheels.org/simple \
         evdev==1.9.2 \
         PyYAML==6.0.3 \
-        pydantic-core==2.41.4
+        pydantic-core==2.41.4 \
+        websockets==16.0
 fi
 info "Syncing Python dependencies with uv..."
 "$UV_BIN" sync \

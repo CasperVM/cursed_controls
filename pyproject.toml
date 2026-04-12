@@ -11,6 +11,7 @@ dependencies = [
     "pydantic==2.12.3",
     "pydantic-core==2.41.4",
     "uvicorn>=0.29",
+    "websockets==16.0",
     "python-multipart>=0.0.9",
 ]
 
@@ -27,6 +28,7 @@ dev = [
 evdev = { index = "piwheels", marker = "platform_machine == 'armv6l'" }
 pyyaml = { index = "piwheels", marker = "platform_machine == 'armv6l'" }
 pydantic-core = { index = "piwheels", marker = "platform_machine == 'armv6l'" }
+websockets = { index = "piwheels", marker = "platform_machine == 'armv6l'" }
 
 [[tool.uv.index]]
 name = "piwheels"
