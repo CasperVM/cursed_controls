@@ -28,6 +28,13 @@ This is a visual mock of the web UI for quick exploration. It does not connect t
 3. Packets are sent to [360-w-raw-gadget](https://github.com/CasperVM/360-w-raw-gadget) (a submodule), which emulates a real Xbox 360 wireless receiver over the Pi's USB OTG port.
 4. Rumble commands from the host are forwarded back to any physical device that supports force feedback.
 
+## Latency
+
+The Pi introduces roughly **10–20 ms** of processing latency (evdev in → USB HID out), measured on a Pi Zero W. Combined with the Bluetooth link from the physical controller (~8–15 ms), total end-to-end latency is probably in the **20–35 ms** range.
+
+For competitive or rhythm games requiring precise timing, you might feel the difference compared to a wired controller (~4 ms).
+But then you're probably not using a wireless controller anyway.
+
 ## Requirements
 
 - Raspberry Pi (or similar SBC) with a USB OTG port
