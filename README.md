@@ -11,7 +11,7 @@ Got a weird Bluetooth controller that nothing supports natively? Xbox 360 contro
 
 cursed_controls runs on a Raspberry Pi Zero between your controllers and the host, emulating a real Xbox 360 wireless receiver over USB OTG. Combine multiple physical devices into a single virtual Xbox pad (think Wii Remote + Nunchuk), with up to 4 controller slots. Works on Windows and Linux; macOS might limited to 1 slot on older versions.
 
-I initially wanted to make this, as some games (especially in unity) can be super finicky about the controllers connected. e.g. even a wireless xbox controller can sometimes cause weird mappings and other issues. In these cases it's useful to 'act' as a wired controller, while still having the benefit of being wireless :D. This completely circumvents having to do painful config on the host/gaming machine where you just want to play. Instead you just let the pi handle it. This is also useful for when you just want to switch between multiple devices without having to repair your BT controllers CONSTANTLY.
+I initially wanted to make this, as some games (especially in unity) can be super finicky about the controllers connected. e.g. even a wireless xbox controller can sometimes cause weird mappings and other issues. In these cases it's useful to 'act' as a wired controller, while still having the benefit of being wireless :D. This completely circumvents having to do painful config on the host/gaming machine where you just want to play. Instead you just let the pi handle it. This is also useful for when you just want to switch between multiple devices without having to pair your BT controllers CONSTANTLY.
 
 Tested on Raspberry Pi Zero W and Pi Zero 2W.
 
