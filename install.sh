@@ -34,6 +34,7 @@ WEB_SERVICE_NAME="cursed-controls-web.service"
 UV_BIN="$INSTALL_HOME/.local/bin/uv"
 PYTHON_REQUEST="$(cat "$CC_DIR/.python-version" 2>/dev/null || echo "3.13")"
 NEED_REBOOT=0
+UV_SYNC_INDEX_ARGS=()
 
 info() { echo "[cursed-controls] $*"; }
 ok()   { echo "[cursed-controls] ✓ $*"; }
@@ -57,6 +58,11 @@ case "$ARCH" in
 esac
 BUILD_JOBS="$(nproc)"
 [ "$BUILD_JOBS" -gt 4 ] && BUILD_JOBS=4
+if [ "$ARCH" = "armv6l" ]; then
+    UV_SYNC_INDEX_ARGS=(
+        --index "piwheels=https://www.piwheels.org/simple"
+    )
+fi
 
 # ── 2. Show detected hardware (UDC is resolved at runtime via /sys/class/udc) ─
 MODEL="$(cat /sys/firmware/devicetree/base/model 2>/dev/null | tr -d '\0' || echo 'unknown')"
@@ -247,7 +253,12 @@ if [ ! -d "$CC_DIR/.venv" ]; then
     "$UV_BIN" venv --python "$PYTHON_REQUEST" "$CC_DIR/.venv"
 fi
 info "Syncing Python dependencies with uv..."
-"$UV_BIN" sync --directory "$CC_DIR" --python "$PYTHON_REQUEST" --no-dev --locked
+"$UV_BIN" sync \
+    --directory "$CC_DIR" \
+    --python "$PYTHON_REQUEST" \
+    --no-dev \
+    --locked \
+    "${UV_SYNC_INDEX_ARGS[@]}"
 ok "Python env"
 
 # ── 12. Seed default mapping and prepare init script ──────────────────────────

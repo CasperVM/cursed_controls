@@ -114,6 +114,13 @@ def test_install_script_uses_uv_for_python_env():
     assert "UV_BIN" in install
 
 
+def test_install_script_uses_piwheels_on_armv6_with_uv():
+    install = (REPO_ROOT / "install.sh").read_text()
+    assert "piwheels.org/simple" in install
+    assert 'if [ "$ARCH" = "armv6l" ]' in install
+    assert '--index "piwheels=https://www.piwheels.org/simple"' in install
+
+
 def test_install_script_installs_python_dev_headers():
     install = (REPO_ROOT / "install.sh").read_text()
     assert "python3-dev" in install
@@ -130,7 +137,9 @@ def test_install_script_uses_repo_python_version_for_uv():
     assert ".python-version" in install
     assert "PYTHON_REQUEST" in install
     assert '"$UV_BIN" venv --python "$PYTHON_REQUEST"' in install
-    assert '"$UV_BIN" sync --directory "$CC_DIR" --python "$PYTHON_REQUEST"' in install
+    assert '"$UV_BIN" sync \\' in install
+    assert '--directory "$CC_DIR" \\' in install
+    assert '--python "$PYTHON_REQUEST" \\' in install
 
 
 def test_install_script_syncs_submodule_urls():
