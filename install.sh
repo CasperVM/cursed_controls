@@ -214,6 +214,7 @@ if [ ! -d "$CC_DIR" ]; then
 fi
 cd "$CC_DIR"
 if [ -d "$CC_DIR/.git" ]; then
+    git submodule sync --recursive
     git submodule update --init --recursive
 else
     info "Using existing local checkout at $CC_DIR"

@@ -29,6 +29,12 @@ def test_install_script_does_not_inline_overwrite_init_script():
     assert 'cat > "$CC_DIR/init-raspbian.sh"' not in install
 
 
+def test_raw_gadget_submodule_uses_https():
+    gitmodules = (REPO_ROOT / ".gitmodules").read_text()
+    assert "https://github.com/CasperVM/360-w-raw-gadget.git" in gitmodules
+    assert "git@github.com:CasperVM/360-w-raw-gadget.git" not in gitmodules
+
+
 def test_init_script_falls_back_to_user_home_for_raw_gadget():
     init_script = (REPO_ROOT / "init-raspbian.sh").read_text()
     assert "__RAW_GADGET_DIR__" not in init_script
@@ -112,6 +118,12 @@ def test_install_script_uses_repo_python_version_for_uv():
     assert "PYTHON_REQUEST" in install
     assert '"$UV_BIN" venv --python "$PYTHON_REQUEST"' in install
     assert '"$UV_BIN" sync --directory "$CC_DIR" --python "$PYTHON_REQUEST"' in install
+
+
+def test_install_script_syncs_submodule_urls():
+    install = (REPO_ROOT / "install.sh").read_text()
+    assert "git submodule sync --recursive" in install
+    assert "git submodule update --init --recursive" in install
 
 
 def test_install_script_builds_xwiimote():
