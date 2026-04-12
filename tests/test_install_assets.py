@@ -122,6 +122,19 @@ def test_install_script_builds_xwiimote():
     assert "sudo make install" in install
 
 
+def test_install_script_patches_xwiimote_for_time64_input_headers():
+    install = (REPO_ROOT / "install.sh").read_text()
+    assert "input_event_sec" in install
+    assert "input_event_usec" in install
+    assert "copy_input_event_time" in install
+
+
+def test_install_script_tolerates_xwiimote_build_failure():
+    install = (REPO_ROOT / "install.sh").read_text()
+    assert "libxwiimote not available" in install
+    assert "warn " in install
+
+
 def test_repo_python_version_matches_current_pi_os():
     python_version = (REPO_ROOT / ".python-version").read_text().strip()
     assert python_version == "3.13"

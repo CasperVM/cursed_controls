@@ -93,16 +93,50 @@ ok "Bluetooth config"
 if ! ldconfig -p 2>/dev/null | grep -q "libxwiimote"; then
     if [ ! -d "$XWIIMOTE_DIR" ]; then
         info "Cloning xwiimote..."
-        git clone https://github.com/xwiimote/xwiimote.git "$XWIIMOTE_DIR"
+        if ! git clone https://github.com/xwiimote/xwiimote.git "$XWIIMOTE_DIR"; then
+            warn "xwiimote clone failed — libxwiimote not available, Wiimote rumble/LEDs will be disabled"
+        fi
     fi
-    info "Building xwiimote..."
-    (
-        cd "$XWIIMOTE_DIR"
-        ./autogen.sh
-        make -j"$BUILD_JOBS"
-        sudo make install
-    )
-    sudo ldconfig
+    if [ -d "$XWIIMOTE_DIR" ] && ! ldconfig -p 2>/dev/null | grep -q "libxwiimote"; then
+        info "Building xwiimote..."
+        if (
+            cd "$XWIIMOTE_DIR"
+            info "Patching xwiimote for modern 32-bit input headers..."
+            python3 - <<'PY'
+from pathlib import Path
+
+path = Path("lib/core.c")
+text = path.read_text()
+helper = """static void copy_input_event_time(struct timeval *dst, const struct input_event *src)
+{
+\tdst->tv_sec = src->input_event_sec;
+\tdst->tv_usec = src->input_event_usec;
+}
+
+"""
+needle = "/* table to convert interface to name */\n"
+old = "memcpy(&ev->time, &input.time, sizeof(struct timeval));"
+new = "copy_input_event_time(&ev->time, &input);"
+
+if helper not in text:
+    if needle not in text:
+        raise SystemExit("xwiimote patch failed: insertion point missing")
+    text = text.replace(needle, helper + needle, 1)
+
+if old in text:
+    text = text.replace(old, new)
+
+path.write_text(text)
+PY
+            ./autogen.sh
+            make -j"$BUILD_JOBS"
+            sudo make install
+        ); then
+            sudo ldconfig
+        else
+            warn "xwiimote build failed — libxwiimote not available, Wiimote rumble/LEDs will be disabled"
+        fi
+    fi
 fi
 ok "xwiimote"
 
