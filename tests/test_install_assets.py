@@ -118,7 +118,12 @@ def test_install_script_uses_piwheels_on_armv6_with_uv():
     install = (REPO_ROOT / "install.sh").read_text()
     assert "piwheels.org/simple" in install
     assert 'if [ "$ARCH" = "armv6l" ]' in install
-    assert '--index "piwheels=https://www.piwheels.org/simple"' in install
+    assert '"$UV_BIN" pip install \\' in install
+    assert '--python "$CC_DIR/.venv/bin/python" \\' in install
+    assert '--index-url https://www.piwheels.org/simple' in install
+    assert "evdev==1.9.2" in install
+    assert "PyYAML==6.0.3" in install
+    assert "pydantic-core==2.41.4" in install
 
 
 def test_install_script_installs_python_dev_headers():
