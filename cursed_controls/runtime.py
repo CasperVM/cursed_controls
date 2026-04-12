@@ -607,11 +607,48 @@ class Runtime:
             while not self._stop_event.is_set():
                 self._drain_bind_queue()  # fast: O(1) queue check when empty
                 if self.drain_ready(timeout=0.001):  # 1 ms — reduced from 10 ms
-                    sent_slots: set[int] = set()
+                    # Merge all devices on the same slot: OR buttons, MAX axes.
+                    slot_states: dict[int, XboxControllerState] = {}
                     for bd in self.bound_by_fd.values():
-                        if bd.slot not in sent_slots:
-                            self.sink.send(bd.state, slot=bd.slot)
-                            sent_slots.add(bd.slot)
+                        s = bd.state
+                        if bd.slot not in slot_states:
+                            slot_states[bd.slot] = XboxControllerState(
+                                a=s.a, b=s.b, x=s.x, y=s.y,
+                                lb=s.lb, rb=s.rb, l3=s.l3, r3=s.r3,
+                                start=s.start, options=s.options, xbox=s.xbox,
+                                dpad_up=s.dpad_up, dpad_down=s.dpad_down,
+                                dpad_left=s.dpad_left, dpad_right=s.dpad_right,
+                                left_trigger=s.left_trigger, right_trigger=s.right_trigger,
+                                left_joystick_x=s.left_joystick_x,
+                                left_joystick_y=s.left_joystick_y,
+                                right_joystick_x=s.right_joystick_x,
+                                right_joystick_y=s.right_joystick_y,
+                            )
+                        else:
+                            m = slot_states[bd.slot]
+                            m.a = m.a or s.a
+                            m.b = m.b or s.b
+                            m.x = m.x or s.x
+                            m.y = m.y or s.y
+                            m.lb = m.lb or s.lb
+                            m.rb = m.rb or s.rb
+                            m.l3 = m.l3 or s.l3
+                            m.r3 = m.r3 or s.r3
+                            m.start = m.start or s.start
+                            m.options = m.options or s.options
+                            m.xbox = m.xbox or s.xbox
+                            m.dpad_up = m.dpad_up or s.dpad_up
+                            m.dpad_down = m.dpad_down or s.dpad_down
+                            m.dpad_left = m.dpad_left or s.dpad_left
+                            m.dpad_right = m.dpad_right or s.dpad_right
+                            m.left_trigger = max(m.left_trigger, s.left_trigger)
+                            m.right_trigger = max(m.right_trigger, s.right_trigger)
+                            m.left_joystick_x = max(m.left_joystick_x, s.left_joystick_x, key=abs)
+                            m.left_joystick_y = max(m.left_joystick_y, s.left_joystick_y, key=abs)
+                            m.right_joystick_x = max(m.right_joystick_x, s.right_joystick_x, key=abs)
+                            m.right_joystick_y = max(m.right_joystick_y, s.right_joystick_y, key=abs)
+                    for slot, merged in slot_states.items():
+                        self.sink.send(merged, slot=slot)
                 self._dispatch_rumble()
         finally:
             self._stop_all_rumble()
