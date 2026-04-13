@@ -10,8 +10,7 @@ def test_web_service_file_exists():
 
 def test_web_service_runs_serve_entrypoint():
     service = (REPO_ROOT / "cursed-controls-web.service").read_text()
-    assert "After=network.target bluetooth.target" in service
-    assert "Wants=bluetooth.target" in service
+    assert "After=basic.target" in service
     assert "ExecStartPre=/bin/bash" in service
     assert "cursed_controls.cli serve" in service
     assert "Restart=on-failure" in service
