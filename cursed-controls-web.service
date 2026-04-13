@@ -1,7 +1,6 @@
 [Unit]
 Description=cursed-controls web UI
-After=network.target bluetooth.target
-Wants=bluetooth.target
+After=basic.target
 
 [Service]
 Type=simple

@@ -1,0 +1,76 @@
+display_name: PS5 DualSense
+match:
+  name: Wireless Controller
+mappings:
+  - {source_type: 1, source_code: 304, target: A,         kind: button, label: X}
+  - {source_type: 1, source_code: 305, target: B,         kind: button, label: CIRCLE}
+  - {source_type: 1, source_code: 307, target: X,         kind: button, label: SQUARE}
+  - {source_type: 1, source_code: 308, target: Y,         kind: button, label: TRIANGLE}
+  - {source_type: 1, source_code: 310, target: BUMPER_L,  kind: button, label: LB}
+  - {source_type: 1, source_code: 311, target: BUMPER_R,  kind: button, label: RB}
+  - {source_type: 1, source_code: 317, target: STICK_L,   kind: button, label: LS Click}
+  - {source_type: 1, source_code: 318, target: STICK_R,   kind: button, label: RS Click}
+  - {source_type: 1, source_code: 315, target: START,     kind: button, label: Menu}
+  - {source_type: 1, source_code: 314, target: OPTIONS,   kind: button, label: View}
+  - {source_type: 1, source_code: 316, target: XBOX,      kind: button, label: Playstation}
+  - {source_type: 3, source_code: 16,  target: DPAD_LEFT,  kind: hat, label: D-Pad X, on_value: -1}
+  - {source_type: 3, source_code: 16,  target: DPAD_RIGHT, kind: hat, label: D-Pad X, on_value: 1}
+  - {source_type: 3, source_code: 17,  target: DPAD_UP,    kind: hat, label: D-Pad Y, on_value: -1}
+  - {source_type: 3, source_code: 17,  target: DPAD_DOWN,  kind: hat, label: D-Pad Y, on_value: 1}
+  - source_type: 3
+    source_code: 0
+    target: LEFT_JOYSTICK_X
+    kind: axis
+    label: Left Stick X
+    deadzone: 0.06
+    source_min: 0
+    source_max: 255
+    target_min: -32767
+    target_max: 32767
+  - source_type: 3
+    source_code: 1
+    target: LEFT_JOYSTICK_Y
+    kind: axis
+    label: Left Stick Y
+    deadzone: 0.06
+    invert: true
+    source_min: 0
+    source_max: 255
+    target_min: -32767
+    target_max: 32767
+  - source_type: 3
+    source_code: 3
+    target: RIGHT_JOYSTICK_X
+    kind: axis
+    label: Right Stick X
+    source_min: 0
+    source_max: 255
+    target_min: -32767
+    target_max: 32767
+  - source_type: 3
+    source_code: 4
+    target: RIGHT_JOYSTICK_Y
+    kind: axis
+    label: Right Stick Y
+    source_min: 0
+    source_max: 255
+    target_min: -32767
+    target_max: 32767
+  - source_type: 3
+    source_code: 2
+    target: LEFT_TRIGGER
+    kind: axis
+    label: LT
+    source_min: 0
+    source_max: 255
+    target_min: 0
+    target_max: 255
+  - source_type: 3
+    source_code: 5
+    target: RIGHT_TRIGGER
+    kind: axis
+    label: RT
+    source_min: 0
+    source_max: 255
+    target_min: 0
+    target_max: 255

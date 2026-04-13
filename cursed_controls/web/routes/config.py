@@ -138,12 +138,9 @@ def _load_from_text(text: str, suffix: str = ".yaml") -> AppConfig:
 def get_config(state: AppState = Depends(get_state)):
     if state.config is None:
         return None
-    from dataclasses import asdict as _asdict
-
-    d = _asdict(state.config)
-    # Convert enums to their string values for JSON serialization
-    _normalize_enums(d)
-    return d
+    # Use the canonical YAML serializer so the returned structure matches what
+    # load_config (used by PUT) expects — flat mapping fields, no nested transform.
+    return yaml.safe_load(_config_to_yaml(state.config))
 
 
 @router.put("/config", status_code=200)

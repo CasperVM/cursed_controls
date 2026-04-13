@@ -39,13 +39,17 @@ function wsSend(msg) {
   }
 }
 
+let _wsEverConnected = false;
+
 function wsConnect() {
   ws = new WebSocket(WS_URL);
   ws.onopen = () => {
     document.getElementById('ws-status').textContent = 'ws: connected';
+    _wsEverConnected = true;
   };
   ws.onclose = () => {
     document.getElementById('ws-status').textContent = 'ws: reconnecting…';
+    if (_wsEverConnected) showToast('Connection lost — reconnecting…', 'error');
     setTimeout(wsConnect, 2000);
   };
   ws.onerror = () => ws.close();
@@ -113,6 +117,7 @@ wsOn('runtime_status', (msg) => {
   const knownStatuses = ['running', 'stopped'];
   dot.className = 'status-dot ' + (knownStatuses.includes(msg.status) ? msg.status : 'stopped');
   lbl.textContent = msg.status;
+  if (msg.status === 'stopped') showToast('Runtime stopped', 'error');
 });
 
 // ── API helpers ───────────────────────────────────────────────

@@ -295,12 +295,21 @@ class Runtime:
                 ff: ForceFeedback | WiimoteFeedback = WiimoteFeedback(dev)
             else:
                 ff = ForceFeedback(dev)
+            num_slots = self.config.runtime.interfaces
+            slot = item.profile.slot
+            if slot >= num_slots:
+                print(
+                    f"[{item.profile.id}] slot {slot} out of range "
+                    f"(interfaces={num_slots}), clamping to {num_slots - 1}",
+                    flush=True,
+                )
+                slot = num_slots - 1
             bd = BoundDevice(
                 item.profile,
                 item.info,
                 dev,
                 ff if ff.supported else None,
-                slot=item.profile.slot,
+                slot=slot,
                 state=XboxControllerState(),
             )
             if isinstance(bd.ff, WiimoteFeedback):
@@ -432,13 +441,15 @@ class Runtime:
                 continue
             if len(matches) > 1:
                 # Composite devices (e.g. Wiimote) create multiple nodes with the
-                # same name. Prefer the composite parent; skip if ambiguous.
+                # same name. Prefer the composite parent if unambiguous.
+                # Otherwise take the first unclaimed match — this handles multiple
+                # identical profiles (e.g. two controllers with the same name):
+                # profiles are iterated in order and each claims one device.
                 parents = [d for d in matches if d.is_composite_parent]
                 if len(parents) == 1:
                     matches = parents
                 else:
-                    still_pending.append(profile)
-                    continue
+                    matches = matches[:1]
             planned = PlannedBinding(profile=profile, info=matches[0])
             bound = self.open_bindings([planned])
             self.register_bound_devices(bound)
@@ -542,9 +553,10 @@ class Runtime:
                     continue
                 if len(matches) > 1:
                     parents = [d for d in matches if d.is_composite_parent]
-                    if len(parents) != 1:
-                        continue
-                    matches = parents
+                    if len(parents) == 1:
+                        matches = parents
+                    else:
+                        matches = matches[:1]
                 self._bind_queue.put(PlannedBinding(profile=profile, info=matches[0]))
                 claimed.add(matches[0].path)
 
@@ -649,6 +661,13 @@ class Runtime:
                             m.right_joystick_y = max(m.right_joystick_y, s.right_joystick_y, key=abs)
                     for slot, merged in slot_states.items():
                         self.sink.send(merged, slot=slot)
+                    # Mirror to slots with no bound device — supports "1 input → N
+                    # virtual controllers" without requiring duplicate physical devices.
+                    if slot_states:
+                        reference = next(iter(slot_states.values()))
+                        for slot in range(self.config.runtime.interfaces):
+                            if slot not in slot_states:
+                                self.sink.send(reference, slot=slot)
                 self._dispatch_rumble()
         finally:
             self._stop_all_rumble()

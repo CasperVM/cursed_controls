@@ -93,6 +93,26 @@ dtparam=act_led_activelow=on
 
 It does not disable Wi-Fi or Bluetooth.
 
+For even faster booting/more optimization, take a look at the boottime optimization doc [here.](boottime-optimizations.md)
+
+## Presets
+
+The web UI ships with ready-made presets in the `presets/` folder. Apply them from the Profiles tab.
+
+| Preset | Match name | Notes |
+|---|---|---|
+| Xbox Wireless Controller | `Xbox Wireless Controller` | |
+| PS5 DualSense | `Wireless Controller` | |
+| Nintendo Pro Controller | `Pro Controller` | Bluetooth; see note below |
+| 8BitDo Pro 3 | `8BitDo Pro 3` | |
+| Wii Remote | `Nintendo Wii Remote` | Pairs with `wiimote` connection type |
+| Wii Remote + Nunchuk | `Nintendo Wii Remote` / `Nunchuk` | Two devices, one slot |
+| Wii Remote + Nunchuk — Rocket League | `Nintendo Wii Remote` / `Nunchuk` | |
+
+> **Nintendo Pro Controller over Bluetooth:** The `hid-nintendo` driver emits IMU (gyro/accelerometer) updates at high frequency regardless of whether you use them, which can make input noticeably laggy or spammy on the Pi. Rumble also tends to work poorly over BT with this driver.
+
+> All presets were made with Bluetooth devices, this hasnt been tested on e.g. a pi4
+
 ## Running CLI
 
 ```bash
